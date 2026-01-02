@@ -1,0 +1,19 @@
+import streamlit as st
+import main_page
+import selection_page
+
+st.set_page_config(
+    page_title="Dragon Trading",
+    page_icon="🐉",
+    layout="wide"
+)
+
+# inizializza stato
+if "page" not in st.session_state:
+    st.session_state.page = 1
+
+# routing
+if st.session_state.page == 1:
+    main_page.render()
+elif st.session_state.page == 2:
+    selection_page.render()
