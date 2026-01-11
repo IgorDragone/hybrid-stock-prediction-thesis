@@ -9,6 +9,17 @@ from fundamentals import fetch_quarterly_fundamentals
 from macro import fetch_macro_fred
 
 def build_database(tickers: list, start: str, end: str, out_path: str) -> None:
+    """
+    Build a database of financial data for given tickers and macroeconomic indicators.
+
+    Args:
+        tickers (list): List of stock ticker symbols.
+        start (str): Start date in 'YYYY-MM-DD' format.
+        end (str): End date in 'YYYY-MM-DD' format.
+        out_path (str): Path to save the resulting database parquet file.
+    Returns:
+        None
+    """
     macro = fetch_macro_fred(
         FRED_SERIES,
         start, end
@@ -24,10 +35,12 @@ def build_database(tickers: list, start: str, end: str, out_path: str) -> None:
 
         df = prices.join(tech)
 
+        # Merge fundamentals
         fundamentals = fetch_quarterly_fundamentals(ticker)
-        fundamentals_daily = fundamentals.reindex(df.index, method="ffill")
+        fundamentals_daily = fundamentals.reindex(df.index, method="ffill") 
         df = df.join(fundamentals_daily)
 
+        # Merge macro
         macro_daily = macro.reindex(df.index, method="ffill")
         df = df.join(macro_daily)
 

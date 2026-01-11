@@ -1,24 +1,49 @@
 # src/data/fundamentals.py
+
 import yfinance as yf
 import pandas as pd
 import numpy as np
 
-def safe_col(df, candidates):
+def safe_col(df: pd.DataFrame, candidates: list) -> pd.Series | None:
+    """
+    Safely select a column from a DataFrame, trying multiple candidate names.
+
+    Args:
+        df (pd.DataFrame): The DataFrame to select from.
+        candidates (list): A list of candidate column names to try.
+
+    Returns:
+        pd.Series: The selected column or None if no match is found.
+    """
     for col in candidates:
         if col in df.columns:
             return df[col]
     return None
 
-def safe_div(num, den):
+def safe_div(num: pd.Series | None, den: pd.Series | None) -> pd.Series:
+    """
+    Safely divide two Series, returning NaN if either is None.
+
+    Args:
+        num (pd.Series | None): Numerator Series.
+        den (pd.Series | None): Denominator Series.
+    Returns:
+        pd.Series: Resulting Series after division or NaN if inputs are invalid.
+    """
     if num is None or den is None:
         return np.nan
     return num / den
 
 def fetch_quarterly_fundamentals(ticker: str) -> pd.DataFrame:
     """
-    Quarterly fundamentals snapshot (lagged).
-    Output index: quarter end date
-    Columns: valuation, profitability, growth, risk metrics
+    Fetch quarterly fundamental data for a given ticker from Yahoo Finance.
+
+    Args:
+        ticker (str): The stock ticker symbol.
+    Returns:
+        pd.DataFrame: DataFrame containing quarterly fundamental ratios with datetime index.
+    Raises:
+        ValueError: If no fundamental data is found for the given ticker.
     """
     tk = yf.Ticker(ticker)
 
@@ -56,7 +81,7 @@ def fetch_quarterly_fundamentals(ticker: str) -> pd.DataFrame:
     df["roe"] = safe_div(net_income, total_equity)
     df["roa"] = safe_div(net_income, total_assets)
 
-    # Growth ratios (quarter over quarter)
+    # Growth ratios (yoy)
     fcf = safe_col(cf, ["Free Cash Flow", "Free Cash Flow Equity"])
     
     df["revenue_growth_yoy"] = (revenue.pct_change(4, fill_method=None) if revenue is not None else np.nan)
@@ -79,12 +104,10 @@ def fetch_quarterly_fundamentals(ticker: str) -> pd.DataFrame:
     # Clean to ensure proper types
     df = df.sort_index()
 
-
     # Shift to ensure lagging, but before let's add a new row for the next quarter from the last available
     next_quarter = df.index[-1] + pd.offsets.QuarterEnd(1)
     df.loc[next_quarter] = df.iloc[-1]
     df = df.shift(1)
-
 
     return df
 
