@@ -11,7 +11,7 @@ TICKERS = [
     # Magnificent 7
     "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA",
     # Non-tech
-    "JPM", "JNJ", "XOM"
+    "KO", "JNJ", "XOM"
 ]
 
 # Macro (FRED)
@@ -22,4 +22,4 @@ FRED_SERIES = [
 ]
 
 # Paths
-DATA_DIR = "data/processed"
+DATA_DIR = "../../data/processed"

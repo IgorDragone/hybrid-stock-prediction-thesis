@@ -8,6 +8,36 @@ from technicals import technical_indicators
 from fundamentals import fetch_quarterly_fundamentals
 from macro import fetch_macro_fred
 
+def merge_macro_with_prices(prices: pd.DataFrame, macro: pd.DataFrame) -> pd.DataFrame: 
+    """
+    Merge macroeconomic data with price data using forward fill to align dates.
+
+    Args:
+        prices (pd.DataFrame): DataFrame containing price data with a DateTime index.
+        macro (pd.DataFrame): DataFrame containing macroeconomic data with a DateTime index.
+    Returns:
+        pd.DataFrame: Merged DataFrame with macroeconomic data aligned to price dates.
+    """
+    macro = macro.copy()
+    macro = macro.reindex(prices.index, method="ffill")
+    #macro = macro.sort_index().ffill()
+
+    SHIFT_RULES = {
+        'GDP': 60,
+        'CPIAUCSL': 15,
+        'FEDFUNDS': 0,
+    }
+
+    for col, shift in SHIFT_RULES.items():
+        if col in macro.columns and shift > 0:
+            macro[col] = macro[col].shift(shift, freq='D')
+
+    macro = macro.sort_index().ffill()
+    df = prices.join(macro, how="left")
+
+    return df
+
+
 def build_database(tickers: list, start: str, end: str, out_path: str) -> None:
     """
     Build a database of financial data for given tickers and macroeconomic indicators.
@@ -23,7 +53,7 @@ def build_database(tickers: list, start: str, end: str, out_path: str) -> None:
     macro = fetch_macro_fred(
         FRED_SERIES,
         start, end
-    )# .reset_index().rename(columns={'index': 'date'})
+    )
 
     all_frames = []
 
@@ -41,8 +71,7 @@ def build_database(tickers: list, start: str, end: str, out_path: str) -> None:
         df = df.join(fundamentals_daily)
 
         # Merge macro
-        macro_daily = macro.reindex(df.index, method="ffill")
-        df = df.join(macro_daily)
+        df = merge_macro_with_prices(df, macro)
 
         df["ticker"] = ticker
         all_frames.append(df)

@@ -23,5 +23,4 @@ def fetch_macro_fred(series: list, start: str, end: str) -> pd.DataFrame:
     macro.index = pd.to_datetime(macro.index)
     macro = macro.sort_index()
 
-    print(macro)
     return macro
