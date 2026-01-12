@@ -90,9 +90,9 @@ def fetch_quarterly_fundamentals(ticker: str) -> pd.DataFrame:
     fcf = safe_col(cf, ["Free Cash Flow", "Free Cash Flow Equity"])
     
     df["fcf_margin"] = safe_div(fcf, revenue)
-    df["revenue_growth_yoy"] = (revenue.pct_change(4, fill_method=None) if revenue is not None else np.nan)
-    df["earnings_growth_yoy"] = (net_income.pct_change(4, fill_method=None) if net_income is not None else np.nan)
-    df["fcf_growth_yoy"] = (fcf.pct_change(4, fill_method=None) if fcf is not None else np.nan)
+    df["revenue_growth_qoq"] = (revenue.pct_change(1, fill_method=None) if revenue is not None else np.nan)
+    df["earnings_growth_qoq"] = (net_income.pct_change(1, fill_method=None) if net_income is not None else np.nan)
+    df["fcf_growth_qoq"] = (fcf.pct_change(1, fill_method=None) if fcf is not None else np.nan)
 
     # Risk ratios
     total_debt = safe_col(bal, ["Total Debt", "Long Term Debt", "Total Liabilities Net Minority Interest"])
