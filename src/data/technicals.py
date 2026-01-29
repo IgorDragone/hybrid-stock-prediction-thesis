@@ -12,6 +12,10 @@ def technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: DataFrame containing technical indicators with the same index as input df.
     """
+
+    if "adj_close" not in df.columns:
+        raise ValueError("technicals.py: expected column 'adj_close' in input DataFrame.")
+
     price = df["adj_close"]
 
     out = pd.DataFrame(index=df.index)
