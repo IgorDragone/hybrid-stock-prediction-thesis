@@ -5,7 +5,7 @@ import pandas as pd
 from config import START_DATE, END_DATE, TICKERS, FRED_SERIES, DATA_DIR
 from prices import fetch_prices
 from technicals import technical_indicators
-from fundamentals import fetch_quarterly_fundamentals
+from fundamentals_yf import fetch_quarterly_fundamentals_yf
 from macro import fetch_macro_fred
 
 def merge_macro_with_prices(prices: pd.DataFrame, macro: pd.DataFrame) -> pd.DataFrame: 
@@ -66,7 +66,7 @@ def build_database(tickers: list, start: str, end: str, out_path: str) -> None:
         df = prices.join(tech)
 
         # Merge fundamentals
-        fundamentals = fetch_quarterly_fundamentals(ticker)
+        fundamentals = fetch_quarterly_fundamentals_yf(ticker)
         fundamentals_daily = fundamentals.reindex(df.index, method="ffill") 
         df = df.join(fundamentals_daily)
 

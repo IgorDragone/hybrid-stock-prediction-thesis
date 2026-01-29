@@ -1,15 +1,15 @@
-from fundamentals import fetch_quarterly_fundamentals
-import yfinance as yf
-from config import START_DATE, END_DATE, FRED_SERIES
-from macro import fetch_macro_fred
+from data.fundamentals_yf import fetch_quarterly_fundamentals
+# import yfinance as yf
+# from config import START_DATE, END_DATE, FRED_SERIES, TICKERS
+# from macro import fetch_macro_fred
 
 # Fetch macroeconomic data
-macro_data = fetch_macro_fred(FRED_SERIES, START_DATE, END_DATE)
-#we print the GDP series value without missing dates
-print(macro_data)
+# macro_data = fetch_macro_fred(FRED_SERIES, START_DATE, END_DATE)
+# we print the GDP series value without missing dates
+# print(macro_data)
 # we print the row of 31st december 2
-
-#fetch_quarterly_fundamentals(ticker)
+# fetch_quarterly_fundamentals("AAPL")
+print("Done")
 
 # # src/data/fundamentals.py
 # import requests

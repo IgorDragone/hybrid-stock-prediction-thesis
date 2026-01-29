@@ -1,4 +1,4 @@
-# src/data/fundamentals.py
+# src/data/fundamentals_yf.py
 
 import yfinance as yf
 import pandas as pd
@@ -36,7 +36,7 @@ def safe_div(num: pd.Series | None, den: pd.Series | None) -> pd.Series:
         return np.nan
     return num / den
 
-def fetch_quarterly_fundamentals(ticker: str) -> pd.DataFrame:
+def fetch_quarterly_fundamentals_yf(ticker: str) -> pd.DataFrame:
     """
     Fetch quarterly fundamental data for a given ticker from Yahoo Finance.
 
@@ -54,6 +54,9 @@ def fetch_quarterly_fundamentals(ticker: str) -> pd.DataFrame:
     bal = tk.quarterly_balance_sheet
     cf  = tk.quarterly_cashflow
 
+ 
+    
+
     if inc.empty or bal.empty:
         raise ValueError(f"No fundamentals for {ticker}")
     
@@ -61,6 +64,10 @@ def fetch_quarterly_fundamentals(ticker: str) -> pd.DataFrame:
     inc = inc.T
     bal = bal.T
     cf  = cf.T  
+
+    print(inc.columns)
+    print(inc["Current Liabilities"])
+    exit()
 
     # We ensure datetime index
     inc.index = pd.to_datetime(inc.index)
