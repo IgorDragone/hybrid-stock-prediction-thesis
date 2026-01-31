@@ -16,7 +16,7 @@ class DomainClipConfig:
     Domain-aware clipping rules.
 
     Notes:
-    - Bounds are in *raw units* (e.g., margins as fraction, growth as fraction).
+    - Bounds are in raw units (e.g., margins as fraction, growth as fraction).
     - These defaults are conservative and can be tightened after EDA.
     """
     # Growth rates: asymmetrically bounded (base effects)
@@ -78,12 +78,36 @@ class PreprocessConfig:
 
 # Helpers
 def _check_required_columns(df: pd.DataFrame, cols: Sequence[str]) -> None:
+    """
+    Ensure required columns are present. Raise KeyError if any are missing.
+
+    Args:
+        df (pd.DataFrame): input dataframe
+        cols (Sequence[str]): required columns
+
+    Raises:
+        KeyError: if any required columns are missing
+    """
     missing = [c for c in cols if c not in df.columns]
     if missing:
         raise KeyError(f"Missing required columns: {missing}")
 
 
+# may delete
 def _ensure_datetime(df: pd.DataFrame, date_col: str) -> pd.DataFrame:
+    """
+    Ensure date_col is datetime64[ns]. Raise ValueError if any non-parsable dates.
+
+    Args:
+        df (pd.DataFrame): input dataframe
+        date_col (str): date column name
+    
+    Returns:
+        pd.DataFrame: copy of df with date_col as datetime64[ns]
+    
+    Raises:
+        ValueError: if any non-parsable dates in date_col
+    """
     out = df.copy()
     out[date_col] = pd.to_datetime(out[date_col], errors="coerce")
     if out[date_col].isna().any():
@@ -94,7 +118,7 @@ def _ensure_datetime(df: pd.DataFrame, date_col: str) -> pd.DataFrame:
         )
     return out
 
-
+# may delete
 def _assert_unique_panel(df: pd.DataFrame, date_col: str, ticker_col: str) -> None:
     dup = int(df.duplicated([date_col, ticker_col]).sum())
     if dup:
@@ -103,7 +127,7 @@ def _assert_unique_panel(df: pd.DataFrame, date_col: str, ticker_col: str) -> No
             "DB build should guarantee uniqueness."
         )
 
-
+# may delete
 def _replace_infs(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     num_cols = out.select_dtypes(include=[np.number]).columns
@@ -228,6 +252,7 @@ def preprocess_panel(df: pd.DataFrame, config: PreprocessConfig = PreprocessConf
     fundamental_cols = list(config.fundamental_cols) if config.fundamental_cols is not None else defaults["fundamental_cols"]
     growth_cols = list(config.growth_cols) if config.growth_cols is not None else defaults["growth_cols"]
     margin_cols = list(config.margin_cols) if config.margin_cols is not None else defaults["margin_cols"]
+    
 
     # 1) Macro forward-fill (post effective_date already ensured upstream)
     if config.macro_ffill and macro_cols:
