@@ -2,10 +2,7 @@ import numpy as np
 import pandas as pd
 
 
-# -----------------------
 # Helpers
-# -----------------------
-
 def sign_with_tol(x: pd.Series, tol: float = 1e-12) -> pd.Series:
     """Return -1/0/+1 with a tolerance around zero."""
     x = x.astype("float64")
@@ -62,10 +59,7 @@ def macro_regime_from_signs(cpi_trend: pd.Series, gdp_trend: pd.Series) -> pd.Se
     return pd.Series(regime, index=cpi_trend.index).astype("category")
 
 
-# -----------------------
-# Main feature engineering
-# -----------------------
-
+# Main feature engineering function
 def engineer_features(
     df: pd.DataFrame,
     date_col: str = "date",
