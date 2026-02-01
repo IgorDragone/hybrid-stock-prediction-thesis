@@ -69,10 +69,10 @@ class PreprocessConfig:
     ticker_col: str = "ticker"
 
     # Column groups
-    macro_cols: Optional[Sequence[str]] = None
-    fundamental_cols: Optional[Sequence[str]] = None
-    growth_cols: Optional[Sequence[str]] = None
-    margin_cols: Optional[Sequence[str]] = None
+    macro_cols: Sequence[str]
+    fundamental_cols: Sequence[str]
+    growth_cols: Sequence[str]
+    margin_cols: Sequence[str]
 
     # Steps toggles
     replace_infs_with_nan: bool = True
@@ -202,9 +202,7 @@ def _winsorize_cross_sectional(
 
 
 def _clip_cols(df: pd.DataFrame, cols: Sequence[str], lo: float, hi: float) -> pd.DataFrame:
-    """
-    Clip a set of columns to fixed bounds, ignoring missing columns.
-    """
+    # Clip a set of columns to fixed bounds, ignoring missing columns.
     if not cols:
         return df
     out = df.copy()
@@ -215,39 +213,11 @@ def _clip_cols(df: pd.DataFrame, cols: Sequence[str], lo: float, hi: float) -> p
 
 
 def _prune_sparse_columns(df: pd.DataFrame, min_non_na_ratio: float) -> pd.DataFrame:
-    """
-    Drop columns with excessive missing values.
-    """
+    # Drop columns with excessive missing values.
     if not (0.0 < min_non_na_ratio <= 1.0):
         raise ValueError("min_non_na_ratio must be in (0, 1].")
     keep = df.columns[df.notna().mean() >= min_non_na_ratio].tolist()
     return df[keep].copy()
-
-
-def _default_column_groups(df: pd.DataFrame) -> Dict[str, List[str]]:
-    """
-    Infer default column groups when explicit lists are not provided.
-    """
-    cols = df.columns.tolist()
-    macro_candidates = [c for c in cols if c in {"CPIAUCSL", "FEDFUNDS", "GDP"}]
-    growth_candidates = [c for c in cols if c.endswith("_growth_qoq")]
-    margin_candidates = [c for c in cols if c in {"net_margin", "operating_margin", "ebitda_margin", "fcf_margin"}]
-
-    # Common fundamental names.
-    known_fund = [
-        "net_margin", "operating_margin", "ebitda_margin", "fcf_margin",
-        "asset_turnover", "roe", "roa",
-        "debt_to_equity", "current_ratio",
-        "revenue_growth_qoq", "earnings_growth_qoq", "fcf_growth_qoq",
-    ]
-    fundamental_candidates = [c for c in known_fund if c in cols]
-
-    return {
-        "macro_cols": macro_candidates,
-        "growth_cols": growth_candidates,
-        "margin_cols": margin_candidates,
-        "fundamental_cols": fundamental_candidates,
-    }
 
 
 #-----------------------------------------------
@@ -264,7 +234,7 @@ def preprocess_panel(df: pd.DataFrame, config: PreprocessConfig = PreprocessConf
         1) Validate required columns and parse dates.
         2) Enforce sorting and uniqueness of (date, ticker).
         3) Replace +/-inf with NaN (numeric columns).
-        4) Resolve column groups (explicit lists or best-effort defaults).
+        4) Resolve column groups (explicit lists).
         5) Forward-fill macro columns within each ticker.
         6) Cross-sectional winsorization of fundamental ratios (per date).
         7) Domain-aware clipping of selected ratios (optional).
@@ -296,12 +266,14 @@ def preprocess_panel(df: pd.DataFrame, config: PreprocessConfig = PreprocessConf
         out = _replace_infs(out)
 
     # Resolve column groups
-    defaults = _default_column_groups(out)
+    if config.macro_cols is None or config.fundamental_cols is None \
+       or config.growth_cols is None or config.margin_cols is None:
+        raise ValueError("Column groups must be explicitly provided in PreprocessConfig.")
 
-    macro_cols = list(config.macro_cols) if config.macro_cols is not None else defaults["macro_cols"]
-    fundamental_cols = list(config.fundamental_cols) if config.fundamental_cols is not None else defaults["fundamental_cols"]
-    growth_cols = list(config.growth_cols) if config.growth_cols is not None else defaults["growth_cols"]
-    margin_cols = list(config.margin_cols) if config.margin_cols is not None else defaults["margin_cols"]
+    macro_cols = list(config.macro_cols)
+    fundamental_cols = list(config.fundamental_cols)
+    growth_cols = list(config.growth_cols)
+    margin_cols = list(config.margin_cols)
     
 
     # 1) Macro forward-fill (post effective_date already ensured upstream)
