@@ -1,4 +1,5 @@
 # src/data/build_db.py
+"""Build financial database parquet from prices, technicals, fundamentals, and macro data."""
 from __future__ import annotations
 
 import json
@@ -20,7 +21,6 @@ from src.data.config import (
     RAW_MACRO_DIR,
 )
 
-
 from src.data.prices import fetch_prices
 from src.data.technicals import technical_indicators
 from src.data.macro import fetch_macro_fred
@@ -32,10 +32,10 @@ def _to_daily_df(df_idx: pd.DataFrame) -> pd.DataFrame:
     Ensure a 'date' column and sorted ascending.
     
     Args:
-        df_idx: DataFrame with DatetimeIndex or 'date' column.
+        df_idx (pd.DataFrame): DataFrame with DatetimeIndex or 'date' column.
 
     Returns:
-        DataFrame with 'date' column sorted ascending.
+        pd.DataFrame: DataFrame with 'date' column sorted ascending.
     """
     if isinstance(df_idx.index, pd.DatetimeIndex):
         df = df_idx.reset_index().rename(columns={"index": "date"})
@@ -44,20 +44,22 @@ def _to_daily_df(df_idx: pd.DataFrame) -> pd.DataFrame:
         if "date" not in df.columns:
             raise ValueError("Expected DatetimeIndex or a 'date' column.")
     df["date"] = pd.to_datetime(df["date"])
+
     return df.sort_values("date")
 
 
 def merge_fundamentals_asof(daily_df: pd.DataFrame, fundamentals_q: pd.DataFrame, lag_days: int) -> pd.DataFrame:
     """
+    Merge quarterly fundamentals into daily data applying publication lag. 
     effective_date = fiscalDateEnding + lag_days; asof backward merge to daily dates.
 
     Args:
-        daily_df: DataFrame with 'date' column.
-        fundamentals_q: DataFrame with 'fiscalDateEnding' column.
-        lag_days: int, number of days to lag fundamentals.
+        daily_df (pd.DataFrame): DataFrame with 'date' column.
+        fundamentals_q (pd.DataFrame): DataFrame with 'fiscalDateEnding' column.
+        lag_days (int): number of days to lag fundamentals.
     
     Returns:
-        Merged DataFrame.
+        pd.DataFrame: Merged DataFrame.
     """
     if fundamentals_q is None or fundamentals_q.empty:
         return daily_df
@@ -81,6 +83,7 @@ def merge_fundamentals_asof(daily_df: pd.DataFrame, fundamentals_q: pd.DataFrame
         direction="backward",
         allow_exact_matches=True,
     )
+
     return merged
 
 
@@ -94,12 +97,12 @@ def merge_macro_asof(
     Output keeps 'macro_effective_date' for sanity checks (can be dropped later).
 
     Args:
-        daily_df: DataFrame with 'date' column.
-        macro: DataFrame with macro series and date index or 'date' column.
-        macro_lag_days: dict mapping macro series names to lag days.
+        daily_df (pd.DataFrame): DataFrame with 'date' column.
+        macro (pd.DataFrame): DataFrame with macro series and date index or 'date' column.
+        macro_lag_days (dict[str, int]): dict mapping macro series names to lag days.
     
     Returns:
-        Merged DataFrame.
+        pd.DataFrame: Merged DataFrame.
     """
     d = daily_df.copy()
     d["date"] = pd.to_datetime(d["date"])
@@ -148,7 +151,6 @@ def merge_macro_asof(
     return merged
 
 
-
 def build_database(
     tickers: list[str],
     start: str,
@@ -161,13 +163,12 @@ def build_database(
     Build financial database parquet from prices, technicals, fundamentals, and macro data.
     
     Args:
-        tickers: List of stock tickers to include.
-        start: Start date (YYYY-MM-DD).
-        end: End date (YYYY-MM-DD).
-        out_path: Output Path for the parquet file.
-        fundamentals_lag_days: Lag days to apply to fundamentals data.
-        force_refresh_prices: If True, refetch prices ignoring cache.
-        force_refresh_macro: If True, refetch macro data ignoring cache.
+        tickers (list[str]): List of stock tickers to include.
+        start (str): Start date (YYYY-MM-DD).
+        end (str): End date (YYYY-MM-DD).
+        out_path (Path): Output Path for the parquet file.
+        force_refresh_prices (bool): If True, refetch prices ignoring cache.
+        force_refresh_macro (bool): If True, refetch macro data ignoring cache.
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -178,19 +179,6 @@ def build_database(
         use_cache=True,
         force_refresh=force_refresh_macro,
     )
-
-    build_report = {
-        "build_timestamp": datetime.now().isoformat(),
-        "start_date": start,
-        "end_date": end,
-        "tickers_requested": tickers,
-        "tickers_built": [],
-        "tickers_failed": [],
-        "fundamentals_lag_days": FUNDAMENTALS_LAG_DAYS,
-        "force_refresh_prices": force_refresh_prices,
-        "force_refresh_macro": force_refresh_macro,
-        "notes": [],
-    }
 
     all_frames: list[pd.DataFrame] = []
 
@@ -232,26 +220,19 @@ def build_database(
 
             df["ticker"] = ticker
             all_frames.append(df)
-            build_report["tickers_built"].append(ticker)
 
         except Exception as e:
             print(f"Failed {ticker}: {e}")
-            build_report["tickers_failed"].append({"ticker": ticker, "error": str(e)})
 
     if not all_frames:
-        raise RuntimeError("No tickers were successfully built. See build_report for details.")
+        raise RuntimeError("No tickers were successfully built.")
 
     panel = pd.concat(all_frames, ignore_index=True).sort_values(["date", "ticker"])
     panel.to_parquet(out_path, index=False)
     print(f"Saved database to {out_path}")
 
-    report_path = out_path.with_suffix(".build_report.json")
-    with report_path.open("w", encoding="utf-8") as f:
-        json.dump(build_report, f, indent=2)
-    print(f"Saved build report to {report_path}")
 
-
-if __name__ == "__main__":
+def main():
     out_file = PROCESSED_DIR / "financial_database.parquet"
     build_database(
         tickers=TICKERS,
@@ -261,3 +242,7 @@ if __name__ == "__main__":
         force_refresh_prices=False,
         force_refresh_macro=False,
     )
+
+
+if __name__ == "__main__":
+    main()

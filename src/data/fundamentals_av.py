@@ -1,5 +1,5 @@
 # src/data/fundamentals_av.py
-
+"""Fetch quarterly fundamentals from Alpha Vantage API with caching."""
 from __future__ import annotations
 
 import json
@@ -19,17 +19,18 @@ def _av_request(function: str, symbol: str, api_key: str, timeout: int = 30) -> 
     Make a request to the Alpha Vantage API.
 
     Args:
-        function: Alpha Vantage function name
-        symbol: Stock ticker symbol
-        api_key: Alpha Vantage API key
-        timeout: Request timeout in seconds
+        function(str): Alpha Vantage function name
+        symbol(str): Stock ticker symbol
+        api_key(str): Alpha Vantage API key
+        timeout(int): Request timeout in seconds
     
     Returns:
-        Parsed JSON response as a dictionary.
+        dict: Parsed JSON response as a dictionary.
     """
     params = {"function": function, "symbol": symbol, "apikey": api_key}
     r = requests.get(AV_URL, params=params, timeout=timeout)
     r.raise_for_status()
+
     return r.json()
 
 
@@ -44,14 +45,14 @@ def _load_or_fetch_json(
     Load JSON data from cache or fetch from Alpha Vantage API if not cached.
 
     Args:
-        cache_path: Path to cache file
-        function: Alpha Vantage function name
-        symbol: Stock ticker symbol
-        api_key: Alpha Vantage API key
-        sleep_seconds: Seconds to sleep after fetching to respect rate limits
+        cache_path(Path): Path to cache file
+        function(str): Alpha Vantage function name
+        symbol(str): Stock ticker symbol
+        api_key(str): Alpha Vantage API key
+        sleep_seconds(float): Seconds to sleep after fetching to respect rate limits
     
     Returns:
-        Parsed JSON data as a dictionary.
+        dict: Parsed JSON data as a dictionary.
     """
     cache_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -61,7 +62,7 @@ def _load_or_fetch_json(
 
     data = _av_request(function=function, symbol=symbol, api_key=api_key)
 
-    # ---- HARD FAILS: DO NOT CACHE THESE ----
+    # HARD FAILS: DO NOT CACHE THESE RESPONSES (something went wrong)
     if "Information" in data:
         # daily rate limit message
         raise RuntimeError(f"Alpha Vantage rate limit: {data['Information'][:200]}")
@@ -75,11 +76,12 @@ def _load_or_fetch_json(
     if not isinstance(data, dict) or len(data) == 0:
         raise RuntimeError("Alpha Vantage returned empty response.")
 
-# ---- SAFE TO CACHE ----
+    # SAFE TO CACHE
     with cache_path.open("w", encoding="utf-8") as f:
         json.dump(data, f)
 
     time.sleep(sleep_seconds)
+
     return data
 
 
@@ -89,6 +91,7 @@ def _to_num(s: pd.Series) -> pd.Series:
 
 
 def _safe_get(df: pd.DataFrame, col: str) -> pd.Series:
+    # Safely get a numeric column from DataFrame, or return a Series of NaNs if missing
     if col not in df.columns:
         return pd.Series([pd.NA] * len(df), index=df.index, dtype="float64")
     return _to_num(df[col])
@@ -100,25 +103,24 @@ def fetch_quarterly_fundamentals_av(
     cache_dir: str | Path,
 ) -> pd.DataFrame:
     """
-    Fetch quarterly fundamentals from Alpha Vantage and return a *reduced* quarterly wide DataFrame.
+    Fetch quarterly fundamentals from Alpha Vantage and return a reduced quarterly wide DataFrame.
 
     Args:
-        ticker: Stock ticker symbol
-        api_key: Alpha Vantage API key
-        cache_dir: Directory to cache JSON responses
+        ticker (str): Stock ticker symbol
+        api_key (str): Alpha Vantage API key
+        cache_dir (str | Path): Directory to cache JSON responses
     
     Returns:
         pd.DataFrame: Quarterly fundamentals DataFrame with the following output columns:
-        - fiscalDateEnding (datetime)
-        - net_margin, operating_margin, ebitda_margin
-        - asset_turnover, roe, roa
-        - fcf_margin
-        - revenue_growth_qoq, earnings_growth_qoq, fcf_growth_qoq
-        - debt_to_equity, current_ratio
+            - fiscalDateEnding (datetime)
+            - net_margin, operating_margin, ebitda_margin
+            - asset_turnover, roe, roa
+            - fcf_margin
+            - revenue_growth_qoq, earnings_growth_qoq, fcf_growth_qoq
+            - debt_to_equity, current_ratio
 
     Notes:
       - No lag applied here. Apply lag later with effective_date + merge_asof.
-      - Free Cash Flow is computed as operatingCashflow - capitalExpenditures.
     """
     cache_dir = Path(cache_dir)
 
@@ -161,7 +163,7 @@ def fetch_quarterly_fundamentals_av(
 
     q = q.sort_values("fiscalDateEnding").reset_index(drop=True)
 
-    # --- Core line items (best-effort, AV normalized fields) ---
+    # Core line items 
     revenue = _safe_get(q, "totalRevenue")
     net_income = _safe_get(q, "netIncome")
     operating_income = _safe_get(q, "operatingIncome")
@@ -209,4 +211,5 @@ def fetch_quarterly_fundamentals_av(
 
     # Clean
     out = out.dropna(subset=["fiscalDateEnding"]).sort_values("fiscalDateEnding")
+
     return out.reset_index(drop=True)

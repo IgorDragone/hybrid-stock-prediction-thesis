@@ -1,7 +1,9 @@
 # src/data/technicals.py
+"""Module for calculating technical indicators from stock price data."""
 
 import pandas as pd
 import numpy as np
+
 
 def technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -9,8 +11,14 @@ def technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
     Args:
         df (pd.DataFrame): DataFrame containing historical price data
+        
     Returns:
-        pd.DataFrame: DataFrame containing technical indicators with the same index as input df.
+        pd.DataFrame: DataFrame containing technical indicators with the same index as input df. 
+        The indicators include:
+            - Trend Indicators: SMA (50, 200), EMA (20), Price/SMA(50)
+            - Momentum Indicators: RSI (14), MACD, MACD Signal
+            - Volatility Indicators: Volatility (20d)
+            - Historical Returns: 1d, 5d, 21d returns
     """
 
     if "adj_close" not in df.columns:
