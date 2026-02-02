@@ -31,7 +31,7 @@ def _fill_zeros_with_last_nonzero(s: pd.Series) -> pd.Series:
     return s2
 
 
-def _tercile_bucket_cols(df: pd.DataFrame, date_col: str, col: str, labels=("low", "mid", "high")) -> pd.Series:
+def _tercile_bucket_cs(df: pd.DataFrame, date_col: str, col: str, labels=("low", "mid", "high")) -> pd.Series:
     # Assign cross-sectional tercile buckets per date based on percentile rank.
     pct = df.groupby(date_col)[col].rank(pct=True, method="average") # pct in (0,1], map to 0/1/2
     buckets = pd.cut(
@@ -129,9 +129,9 @@ def engineer_features(
     # 2) FUNDAMENTALS (CS buckets)
     
     # Buckets per date: low/mid/high
-    df["margin_bucket"] = _tercile_bucket_cols(df, date_col, "net_margin")
-    df["profitability_bucket"] = _tercile_bucket_cols(df, date_col, "roe")
-    df["leverage_bucket"] = _tercile_bucket_cols(df, date_col, "debt_to_equity")
+    df["margin_bucket"] = _tercile_bucket_cs(df, date_col, "net_margin")
+    df["profitability_bucket"] = _tercile_bucket_cs(df, date_col, "roe")
+    df["leverage_bucket"] = _tercile_bucket_cs(df, date_col, "debt_to_equity")
 
     # Flags
     df["is_profitable"] = (df["net_margin"] > 0).astype("int8")
