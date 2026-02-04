@@ -68,29 +68,25 @@ tickers_we_already_have = [
     # Non-tech
     "KO", "JNJ", "XOM",
 ]
-
-tickers_we_want = list(set(tickers) - set(tickers_we_already_have))
-print("Tickers we want to fetch info for:", tickers_we_want)
-print("Number of tickers to fetch info for:", len(tickers_we_want))
-
+ 
 # we divide it in groups of 8
 group = 8
 
-group_1 = tickers_we_want[0:group]
-group_2 = tickers_we_want[group:2*group]
-group_3 = tickers_we_want[2*group:3*group]
-group_4 = tickers_we_want[3*group:4*group]
-group_5 = tickers_we_want[4*group:5*group]
+group_1 = ["AMT", "CAT", "CVX", "GE", "GS", "NKE", "PFE", "UNH"]
+group_2 = ["JPM", "BAC", "MS", "AXP", "MCD", "SBUX", "PEP"]
+group_3 = ["PG", "WMT", "COST", "MRK", "ABBV", "COP", "SHEL"] 
+group_4 = ["TTE", "BA", "MMM", "UNP", "NEE", "DUK", "SO", "D"]
+group_5 = ["AEP", "PLD", "SPG", "PSA", "EQIX"]
 
-print("Group 1:", group_1)
+# print("Group 1:", group_1)
 print("Group 2:", group_2)
-print("Group 3:", group_3)
-print("Group 4:", group_4)
-print("Group 5:", group_5)
+# print("Group 3:", group_3)
+# print("Group 4:", group_4)
+# print("Group 5:", group_5)
 
 from src.data.config import AV_API_KEY, RAW_AV_DIR
 from src.data.fundamentals_av import fetch_quarterly_fundamentals_av
-for ticker in group_1:
+for ticker in group_2:
     df_fund = fetch_quarterly_fundamentals_av(ticker=ticker, api_key=AV_API_KEY, cache_dir=RAW_AV_DIR)
 # for ticker in tickers:
 #     t = yf.Ticker(ticker)
@@ -100,3 +96,52 @@ for ticker in group_1:
 #     industry = info.get("industry")
 
 #     print(f"{ticker}: {sector} | {industry}")
+tickers_we_already_have = group_1 + group_2+ tickers_we_already_have
+earliest_bal_date = {"date": None, "ticker": None}
+earliest_inc_date = {"date": None, "ticker": None}
+earliest_cf_date = {"date": None, "ticker": None}
+for t in tickers_we_already_have:
+    TICKER = t
+    INC_RAW = RAW_AV_DIR  / "income" / f"{TICKER}.json"
+    BAL_RAW = RAW_AV_DIR  / "balance" / f"{TICKER}.json"
+    CF_RAW = RAW_AV_DIR  / "cashflow" / f"{TICKER}.json"
+    with open(INC_RAW, "r") as f:
+        data_inc = f.read()
+
+    with open(BAL_RAW, "r") as f:
+        data_bal = f.read()
+
+    with open(CF_RAW, "r") as f:
+        data_cf = f.read()
+
+    # print the earlieast date available
+    import json
+    data_inc_json = json.loads(data_inc)
+    quarterly_reports = data_inc_json.get("quarterlyReports", [])
+    earliest_report = quarterly_reports[-1]
+    earliest_balance_date = earliest_report.get("fiscalDateEnding")
+    if earliest_inc_date["date"] is None or earliest_balance_date < earliest_inc_date["date"]:
+        earliest_inc_date["date"] = earliest_balance_date
+        earliest_inc_date["ticker"] = TICKER
+
+    data_bal_json = json.loads(data_bal)
+    quarterly_reports_bal = data_bal_json.get("quarterlyReports", [])
+    earliest_report_bal = quarterly_reports_bal[-1]
+    earliest_balance_date_bal = earliest_report_bal.get("fiscalDateEnding")
+    if earliest_bal_date["date"] is None or earliest_balance_date_bal < earliest_bal_date["date"]:
+        earliest_bal_date["date"] = earliest_balance_date_bal
+        earliest_bal_date["ticker"] = TICKER
+    
+
+    data_cf_json = json.loads(data_cf)
+    quarterly_reports_cf = data_cf_json.get("quarterlyReports", [])
+    earliest_report_cf = quarterly_reports_cf[-1]
+    earliest_balance_date_cf = earliest_report_cf.get("fiscalDateEnding")
+    if earliest_cf_date["date"] is None or earliest_balance_date_cf < earliest_cf_date["date"]:
+        earliest_cf_date["date"] = earliest_balance_date_cf
+        earliest_cf_date["ticker"] = TICKER
+
+print("Earliest Income Statement date:", earliest_inc_date["date"], "Ticker:", earliest_inc_date["ticker"])
+print("Earliest Balance Sheet date:", earliest_bal_date["date"], "Ticker:", earliest_bal_date["ticker"])
+print("Earliest Cash Flow date:", earliest_cf_date["date"], "Ticker:", earliest_cf_date["ticker"])
+    
