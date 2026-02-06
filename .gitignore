@@ -20,6 +20,8 @@ env/
 data/raw/
 data/processed/
 !data/processed/README.md
+!data/processed/datasets/**/config.yaml
+!data/processed/datasets/**/manifest.json
 
 # Results/artifacts (keep only if you want)
 results/
