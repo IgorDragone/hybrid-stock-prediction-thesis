@@ -1,9 +1,32 @@
-# virtual environments
-venv/
-
-# data
-data/raw
-data/processed
-
-#pycache
+# Python
 __pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Environments
+.venv/
+venv/
+env/
+
+# OS
+.DS_Store
+
+# Data (keep repo light)
+data/raw/
+data/processed/
+!data/processed/README.md
+
+# Results/artifacts (keep only if you want)
+results/
+!results/README.md
+
+# Logs
+*.log
+
+# Jupyter
+*.nbconvert.ipynb

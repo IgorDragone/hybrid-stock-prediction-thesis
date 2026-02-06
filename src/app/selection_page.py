@@ -1,98 +1,143 @@
 import streamlit as st
 
-def traffic_light_animated(status="OFF"):
-    colors = {
-        "OFF": "#444444",
-        "BUY": "#00C853",
-        "HOLD": "#FFD600",
-        "SELL": "#D50000"
-    }
+import compare_flow
+import db_flow
+import model_flow
+import portfolio_flow
+import summary_page
+from ui_components import apply_style, status_box
 
-    color = colors.get(status, "#444444")
 
-    st.markdown(
-        f"""
-        <style>
-        @keyframes pulse {{
-            0% {{ box-shadow: 0 0 5px {color}; }}
-            50% {{ box-shadow: 0 0 30px {color}; }}
-            100% {{ box-shadow: 0 0 5px {color}; }}
-        }}
-        </style>
+def _init_flow_state():
+    if "ui_page" not in st.session_state:
+        st.session_state.ui_page = "portfolio_home"
 
-        <div style="
-            width: 90px;
-            height: 90px;
-            margin: auto;
-            border-radius: 50%;
-            background-color: {color};
-            animation: pulse 1.5s infinite;
-        ">
-        </div>
-        """,
-        unsafe_allow_html=True
+    if "portfolio_name" not in st.session_state:
+        st.session_state.portfolio_name = "My Portfolio"
+    if "portfolio_tickers" not in st.session_state:
+        st.session_state.portfolio_tickers = []
+    if "rebalance_freq" not in st.session_state:
+        st.session_state.rebalance_freq = "Monthly"
+
+    if "model_mode" not in st.session_state:
+        st.session_state.model_mode = "Load existing model"
+    if "model_selected" not in st.session_state:
+        st.session_state.model_selected = None
+    if "model_candidate" not in st.session_state:
+        st.session_state.model_candidate = None
+    if "model_type" not in st.session_state:
+        st.session_state.model_type = None
+    if "available_models" not in st.session_state:
+        st.session_state.available_models = [
+            "baseline_xgb_v1",
+            "lstm_sequence_v2",
+            "transformer_momentum_v1",
+        ]
+    if "model_db_map" not in st.session_state:
+        st.session_state.model_db_map = {}
+    if "model_pending" not in st.session_state:
+        st.session_state.model_pending = None
+
+    if "db_mode" not in st.session_state:
+        st.session_state.db_mode = "Load existing database"
+    if "db_selected" not in st.session_state:
+        st.session_state.db_selected = None
+    if "db_candidate" not in st.session_state:
+        st.session_state.db_candidate = None
+    if "db_params" not in st.session_state:
+        st.session_state.db_params = {"horizon": "3 Months", "tickers": 10}
+    if "db_confirmed" not in st.session_state:
+        st.session_state.db_confirmed = False
+
+    if "saved_portfolios" not in st.session_state:
+        st.session_state.saved_portfolios = []
+
+
+def _summary_box(show_model: bool = False):
+    model_label = st.session_state.model_selected or "Yet to choose"
+    tickers = (
+        ", ".join(st.session_state.portfolio_tickers)
+        if st.session_state.portfolio_tickers
+        else "None"
     )
+    lines = [
+        "<b>Summary</b>",
+        f"Portfolio: {st.session_state.portfolio_name}",
+        f"Tickers: {tickers}",
+        f"Rebalance: {st.session_state.rebalance_freq}",
+    ]
+    if show_model:
+        lines.append(f"Model: {model_label}")
+        if st.session_state.model_selected:
+            db_label = st.session_state.db_selected or st.session_state.model_db_map.get(
+                st.session_state.model_selected, "Pending"
+            )
+            lines.append(f"Database used for training the model: {db_label}")
+    status_box("<br>".join(lines))
+
+
+def _model_page():
+    st.subheader("Model Selection")
+    _summary_box()
+
+    tab_select, tab_compare = st.tabs(["Select Model", "Compare Models"])
+    with tab_select:
+        st.session_state.model_mode = st.radio(
+            "Choose model path",
+            ["Load existing model", "Create new model"],
+            index=0 if st.session_state.model_mode == "Load existing model" else 1,
+        )
+        model_flow.render(st.session_state.model_mode)
+    with tab_compare:
+        compare_flow.compare_section()
+
+    if st.button("Back to Portfolio", use_container_width=True):
+        st.session_state.ui_page = "portfolio_builder"
+
+
+def _db_page():
+    st.subheader("Database Selection")
+    _summary_box()
+    if st.session_state.model_mode != "Create new model":
+        status_box("Database selection is only available when creating a new model.")
+        if st.button("Back to Models", use_container_width=True):
+            st.session_state.ui_page = "model_page"
+        return
+
+    db_flow.render(st.session_state.db_mode)
+
+    if st.session_state.db_confirmed:
+        st.session_state.db_confirmed = False
+        if st.session_state.model_pending:
+            base_name = st.session_state.model_pending
+            suffix = len(st.session_state.available_models) + 1
+            new_name = f"{base_name}_custom_{suffix}"
+            st.session_state.available_models.append(new_name)
+            st.session_state.model_db_map[new_name] = st.session_state.db_selected
+            st.session_state.model_pending = None
+            st.session_state.model_mode = "Load existing model"
+            st.session_state.model_candidate = new_name
+            st.session_state.db_selected = None
+        st.session_state.ui_page = "model_page"
+        st.rerun()
+
+    if st.button("Back to Models", use_container_width=True):
+        st.session_state.ui_page = "model_page"
+
+
+
 
 def render():
-    st.title("Stock Analysis")
+    _init_flow_state()
+    apply_style()
 
-    st.markdown(
-        """
-        Welcome to the Stock Analysis Page! Here, you can explore various
-        stock market data, visualize trends, and gain insights to make
-        informed investment decisions. Use the tools and charts provided
-        to analyze stock performance and identify potential opportunities.
-        """
-    )
-    st.markdown( "### 📈 Graphics")
-
-    col1, col2 = st.columns([0.2, 0.8])
-    with col1:
-        stock = st.selectbox(
-            "Choose a stock",
-            ["AAPL", "MSFT", "GOOGL", "TSLA", "AMZN"]
-        )
-
-        indicator = st.selectbox(
-            "Choose an indicator",
-            ["Moving Average", "RSI", "MACD", "Bollinger Bands"]
-        )
-
-        time_horizon = st.pills(
-            "Select Time Horizon",
-            options=["1 Month", "3 Months", "6 Months", "1 Year", "5 Years"]
-        )
-
-    with col2:
-        st.markdown(
-            f"<div style='text-align: center;'> Stock Analysis for {stock}</div>",
-            unsafe_allow_html=True
-        )
-        # Placeholder for stock analysis content
-        st.line_chart({
-            'Price': [150, 152, 153, 151, 155, 157, 160],
-            'Volume': [2000, 2200, 2100, 2300, 2500, 2400, 2600]
-        })
-
-    st.divider()
-    light_placeholder = st.empty()
-    light_placeholder.markdown(f"### 🚦 Trading Signal for {stock}")
-    traffic_placeholder = st.empty()
-    signal = ""
-
-
-    with traffic_placeholder:
-        traffic_light_animated("OFF")
-
-    st.write("")
-    st.write("")
-
-    col1, col2, col3 = st.columns([1,2,1])
-    with col2:
-      if st.button("Generate Trading Signal", width="stretch"):
-          import random
-          signal = random.choice(["BUY", "HOLD", "SELL"])
-          with traffic_placeholder:
-              traffic_light_animated(signal)
-    if signal:
-      st.write(f"Giving these conditions, the recommended action is to {signal}")
+    if st.session_state.ui_page == "portfolio_home":
+        portfolio_flow.portfolio_home()
+    elif st.session_state.ui_page == "portfolio_builder":
+        portfolio_flow.portfolio_builder(_summary_box)
+    elif st.session_state.ui_page == "model_page":
+        _model_page()
+    elif st.session_state.ui_page == "db_page":
+        _db_page()
+    elif st.session_state.ui_page == "summary_page":
+        summary_page.summary_page(_summary_box)

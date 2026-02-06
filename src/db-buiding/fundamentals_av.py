@@ -143,73 +143,73 @@ def fetch_quarterly_fundamentals_av(
         api_key=api_key,
     )
 
-    inc = pd.DataFrame(income_json.get("quarterlyReports", []))
-    bal = pd.DataFrame(balance_json.get("quarterlyReports", []))
-    cf = pd.DataFrame(cashflow_json.get("quarterlyReports", []))
+    # inc = pd.DataFrame(income_json.get("quarterlyReports", []))
+    # bal = pd.DataFrame(balance_json.get("quarterlyReports", []))
+    # cf = pd.DataFrame(cashflow_json.get("quarterlyReports", []))
 
-    if inc.empty or bal.empty:
-        # cash flow can be empty for some tickers; income+balance is the minimum
-        raise ValueError(f"No quarterly fundamentals from AV for {ticker}")
+    # if inc.empty or bal.empty:
+    #     # cash flow can be empty for some tickers; income+balance is the minimum
+    #     raise ValueError(f"No quarterly fundamentals from AV for {ticker}")
 
-    # Standardize date
-    for df in (inc, bal, cf):
-        if not df.empty and "fiscalDateEnding" in df.columns:
-            df["fiscalDateEnding"] = pd.to_datetime(df["fiscalDateEnding"], errors="coerce")
+    # # Standardize date
+    # for df in (inc, bal, cf):
+    #     if not df.empty and "fiscalDateEnding" in df.columns:
+    #         df["fiscalDateEnding"] = pd.to_datetime(df["fiscalDateEnding"], errors="coerce")
 
-    # Merge statements on fiscalDateEnding
-    q = inc.merge(bal, on="fiscalDateEnding", how="outer", suffixes=("", "_bal"))
-    if not cf.empty:
-        q = q.merge(cf, on="fiscalDateEnding", how="outer", suffixes=("", "_cf"))
+    # # Merge statements on fiscalDateEnding
+    # q = inc.merge(bal, on="fiscalDateEnding", how="outer", suffixes=("", "_bal"))
+    # if not cf.empty:
+    #     q = q.merge(cf, on="fiscalDateEnding", how="outer", suffixes=("", "_cf"))
 
-    q = q.sort_values("fiscalDateEnding").reset_index(drop=True)
+    # q = q.sort_values("fiscalDateEnding").reset_index(drop=True)
 
-    # Core line items 
-    revenue = _safe_get(q, "totalRevenue")
-    net_income = _safe_get(q, "netIncome")
-    operating_income = _safe_get(q, "operatingIncome")
-    ebitda = _safe_get(q, "ebitda")
+    # # Core line items 
+    # revenue = _safe_get(q, "totalRevenue")
+    # net_income = _safe_get(q, "netIncome")
+    # operating_income = _safe_get(q, "operatingIncome")
+    # ebitda = _safe_get(q, "ebitda")
 
-    total_assets = _safe_get(q, "totalAssets")
-    total_equity = _safe_get(q, "totalShareholderEquity")
+    # total_assets = _safe_get(q, "totalAssets")
+    # total_equity = _safe_get(q, "totalShareholderEquity")
 
-    # debt field can vary; AV often exposes shortLongTermDebtTotal
-    total_debt = _safe_get(q, "shortLongTermDebtTotal")
-    if total_debt.isna().all():
-        # fallback: totalLiabilities (less ideal, but better than nothing)
-        total_debt = _safe_get(q, "totalLiabilities")
+    # # debt field can vary; AV often exposes shortLongTermDebtTotal
+    # total_debt = _safe_get(q, "shortLongTermDebtTotal")
+    # if total_debt.isna().all():
+    #     # fallback: totalLiabilities (less ideal, but better than nothing)
+    #     total_debt = _safe_get(q, "totalLiabilities")
 
-    current_assets = _safe_get(q, "totalCurrentAssets")
-    current_liabilities = _safe_get(q, "totalCurrentLiabilities")
+    # current_assets = _safe_get(q, "totalCurrentAssets")
+    # current_liabilities = _safe_get(q, "totalCurrentLiabilities")
 
-    # Cash flow: FCF = operating cash flow - capex (capex is typically negative in many feeds; handle both cases)
-    op_cf = _safe_get(q, "operatingCashflow")
-    capex = _safe_get(q, "capitalExpenditures")
-    # If capex is already negative, op_cf - capex increases; if positive, op_cf - capex reduces. This formula is standard.
-    fcf = op_cf - capex
+    # # Cash flow: FCF = operating cash flow - capex (capex is typically negative in many feeds; handle both cases)
+    # op_cf = _safe_get(q, "operatingCashflow")
+    # capex = _safe_get(q, "capitalExpenditures")
+    # # If capex is already negative, op_cf - capex increases; if positive, op_cf - capex reduces. This formula is standard.
+    # fcf = op_cf - capex
 
-    out = pd.DataFrame({"fiscalDateEnding": q["fiscalDateEnding"]})
+    # out = pd.DataFrame({"fiscalDateEnding": q["fiscalDateEnding"]})
 
-    # Profitability
-    out["net_margin"] = net_income / revenue
-    out["operating_margin"] = operating_income / revenue
-    out["ebitda_margin"] = ebitda / revenue
-    out["asset_turnover"] = revenue / total_assets
-    out["roe"] = net_income / total_equity
-    out["roa"] = net_income / total_assets
+    # # Profitability
+    # out["net_margin"] = net_income / revenue
+    # out["operating_margin"] = operating_income / revenue
+    # out["ebitda_margin"] = ebitda / revenue
+    # out["asset_turnover"] = revenue / total_assets
+    # out["roe"] = net_income / total_equity
+    # out["roa"] = net_income / total_assets
 
-    # Cash quality / margins
-    out["fcf_margin"] = fcf / revenue
+    # # Cash quality / margins
+    # out["fcf_margin"] = fcf / revenue
 
-    # Growth (QoQ)
-    out["revenue_growth_qoq"] = revenue.pct_change(1)
-    out["earnings_growth_qoq"] = net_income.pct_change(1)
-    out["fcf_growth_qoq"] = fcf.pct_change(1)
+    # # Growth (QoQ)
+    # out["revenue_growth_qoq"] = revenue.pct_change(1)
+    # out["earnings_growth_qoq"] = net_income.pct_change(1)
+    # out["fcf_growth_qoq"] = fcf.pct_change(1)
 
-    # Risk / liquidity
-    out["debt_to_equity"] = total_debt / total_equity
-    out["current_ratio"] = current_assets / current_liabilities
+    # # Risk / liquidity
+    # out["debt_to_equity"] = total_debt / total_equity
+    # out["current_ratio"] = current_assets / current_liabilities
 
-    # Clean
-    out = out.dropna(subset=["fiscalDateEnding"]).sort_values("fiscalDateEnding")
+    # # Clean
+    # out = out.dropna(subset=["fiscalDateEnding"]).sort_values("fiscalDateEnding")
 
-    return out.reset_index(drop=True)
+    # return out.reset_index(drop=True)

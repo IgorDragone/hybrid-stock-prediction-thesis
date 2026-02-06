@@ -1,5 +1,8 @@
 import streamlit as st
 
+REPO_PATH = "/Users/igordragone/projects/hybrid-stock-prediction-thesis/"
+ASSETS_PATH = REPO_PATH + "src/app/assets/"
+
 def render():
 
     # TITOLO
@@ -20,7 +23,7 @@ def render():
 
     # HERO IMAGE
     st.image(
-        "assets/dragon_trading3.png",
+        ASSETS_PATH + "dragon_trading3.png",
         caption="Turning data into investment insights"
     )
 
