@@ -8,10 +8,19 @@ supervised learning based on forward returns and cross-sectional ranking.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from typing import Optional, Tuple
 
 import numpy as np
 import pandas as pd
+
+
+logger = logging.getLogger(__name__)
+if not logging.getLogger().handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    )
 
 
 @dataclass
@@ -86,6 +95,7 @@ def construct_target(df: pd.DataFrame, config: Optional[TargetConfig] = None) ->
         pd.DataFrame: DataFrame with additional columns for forward returns, score, and target labels.
     """
     cfg = config or TargetConfig()
+    logger.info("Construct target: %d rows, %d columns", df.shape[0], df.shape[1])
     out = df.copy()
 
     _require_cols(out, (cfg.date_col, cfg.ticker_col, cfg.price_col))
@@ -122,6 +132,7 @@ def construct_target(df: pd.DataFrame, config: Optional[TargetConfig] = None) ->
     # If score missing -> target missing (cannot train)
     out.loc[out[cfg.fwd_score_col].isna(), cfg.target_col] = np.nan
 
+    logger.info("Target construction complete: %d rows, %d columns", out.shape[0], out.shape[1])
     return out
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 import pandas as pd
@@ -25,6 +26,14 @@ from src.data.prices import fetch_prices
 from src.data.technicals import technical_indicators
 from src.data.macro import fetch_macro_fred
 from src.data.fundamentals_av import fetch_quarterly_fundamentals_av
+
+
+logger = logging.getLogger(__name__)
+if not logging.getLogger().handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    )
 
 
 def _to_daily_df(df_idx: pd.DataFrame) -> pd.DataFrame:
@@ -221,18 +230,19 @@ def build_database(
             df["ticker"] = ticker
             all_frames.append(df)
 
-        except Exception as e:
-            print(f"Failed {ticker}: {e}")
+        except Exception:
+            logger.exception("Failed %s", ticker)
 
     if not all_frames:
         raise RuntimeError("No tickers were successfully built.")
 
     panel = pd.concat(all_frames, ignore_index=True).sort_values(["date", "ticker"])
     panel.to_parquet(out_path, index=False)
-    print(f"Saved database to {out_path}")
+    logger.info("Saved database to %s", out_path)
 
 
 def main():
+    logger.info("Building database for %d tickers", len(TICKERS))
     out_file = PROCESSED_DIR / "financial_database.parquet"
     build_database(
         tickers=TICKERS,

@@ -9,10 +9,19 @@ panel integrity (sorted, unique (date, ticker)).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import logging
 from typing import Optional, Sequence, Dict, Tuple, List
 
 import numpy as np
 import pandas as pd
+
+
+logger = logging.getLogger(__name__)
+if not logging.getLogger().handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    )
 
 # -----------------------------------------------
 # Config dataclasses
@@ -248,6 +257,7 @@ def preprocess_panel(df: pd.DataFrame, config: PreprocessConfig = PreprocessConf
     Returns:
         pd.DataFrame: Processed panel sorted by (date, ticker) with a fresh integer index.
     """
+    logger.info("Preprocess panel: %d rows, %d columns", df.shape[0], df.shape[1])
     _check_required_columns(df, [config.date_col, config.ticker_col])
 
     out = df.copy()
@@ -325,5 +335,5 @@ def preprocess_panel(df: pd.DataFrame, config: PreprocessConfig = PreprocessConf
 
     # Final sort/reset
     out = out.sort_values([config.date_col, config.ticker_col]).reset_index(drop=True)
-    
+    logger.info("Preprocess panel complete: %d rows, %d columns", out.shape[0], out.shape[1])
     return out

@@ -7,8 +7,17 @@ This module derives:
 - Simple technical indicator states (RSI, trend vs SMA)
 """
 
+import logging
 import numpy as np
 import pandas as pd
+
+
+logger = logging.getLogger(__name__)
+if not logging.getLogger().handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    )
 
 
 # -----------------------------------------------
@@ -97,6 +106,7 @@ def engineer_features(
     Returns:
         pd.DataFrame: Input DataFrame enriched with engineered features.
     """
+    logger.info("Engineer features: %d rows, %d columns", df.shape[0], df.shape[1])
     df = df.copy()
     df[date_col] = pd.to_datetime(df[date_col])
     df = df.sort_values([date_col, ticker_col]).reset_index(drop=True)
@@ -158,4 +168,5 @@ def engineer_features(
     trend = df["adj_close"] > df["sma_200"]
     df["trend_state"] = pd.Series(np.where(df["sma_200"].isna(), pd.NA, trend.astype(int)), index=df.index).astype("Int64")
 
+    logger.info("Feature engineering complete: %d rows, %d columns", df.shape[0], df.shape[1])
     return df

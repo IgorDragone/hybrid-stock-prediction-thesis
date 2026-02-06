@@ -1,6 +1,16 @@
+import logging
 import streamlit as st
 import main_page
 import selection_page
+
+
+logger = logging.getLogger(__name__)
+if not logging.getLogger().handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    )
+logger.info("Starting Streamlit app")
 
 st.set_page_config(
     page_title="Dragon Trading",

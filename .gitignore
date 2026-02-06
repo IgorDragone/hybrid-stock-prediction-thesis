@@ -27,6 +27,7 @@ results/
 
 # Logs
 *.log
+logs/
 
 # Jupyter
 *.nbconvert.ipynb
