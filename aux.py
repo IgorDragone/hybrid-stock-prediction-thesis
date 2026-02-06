@@ -81,12 +81,12 @@ group_5 = ["AEP", "PLD", "SPG", "PSA", "EQIX"]
 # print("Group 1:", group_1)
 # print("Group 2:", group_2)
 # print("Group 3:", group_3)
-print("Group 4:", group_4)
-# print("Group 5:", group_5)
+# print("Group 4:", group_4)
+print("Group 5:", group_5)
 
-from src.data.config import AV_API_KEY, RAW_AV_DIR
-from src.data.fundamentals_av import fetch_quarterly_fundamentals_av
-for ticker in group_4:
+from src.db_buiding.config import AV_API_KEY, RAW_AV_DIR
+from src.db_buiding.fundamentals_av import fetch_quarterly_fundamentals_av
+for ticker in group_5:
     print(f"Fetching {ticker}...")
     df_fund = fetch_quarterly_fundamentals_av(ticker=ticker, api_key=AV_API_KEY, cache_dir=RAW_AV_DIR)
 # for ticker in tickers:
@@ -97,7 +97,7 @@ for ticker in group_4:
 #     industry = info.get("industry")
 
 #     print(f"{ticker}: {sector} | {industry}")
-tickers_we_already_have = group_1 + group_2 + group_3 + tickers_we_already_have
+tickers_we_already_have = group_1 + group_2 + group_3 + group_4 + group_5 + tickers_we_already_have
 earliest_bal_date = {"date": None, "ticker": None}
 earliest_inc_date = {"date": None, "ticker": None}
 earliest_cf_date = {"date": None, "ticker": None}
@@ -146,5 +146,4 @@ print("Earliest Income Statement date:", earliest_inc_date["date"], "Ticker:", e
 print ("-----------------------------------")
 print("Earliest Balance Sheet date:", earliest_bal_date["date"], "Ticker:", earliest_bal_date["ticker"])
 print ("-----------------------------------")
-print("Earliest Cash Flow date:", earliest_cf_date["date"], "Ticker:", earliest_cf_date["ticker"])
-    
+print("Earliest Cash Flow date:", earliest_cf_date["date"], "Ticker:", earliest_cf_date["ticker"])    
