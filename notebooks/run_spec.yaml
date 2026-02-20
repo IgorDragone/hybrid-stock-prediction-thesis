@@ -1,0 +1,19 @@
+dataset_id: db_15t_10y
+tickers:
+  - AAPL
+  - MSFT
+  - NVDA
+  - JPM
+  - BAC
+  - GS
+  - AMZN
+  - NKE
+  - MCD
+  - JNJ
+  - PFE
+  - MRK
+  - XOM
+  - CVX
+  - COP
+start_date: "2016-01-01"
+end_date: "2025-12-31"

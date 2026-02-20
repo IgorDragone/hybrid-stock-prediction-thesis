@@ -5,15 +5,11 @@ APP=src/app/streamlit_app.py
 .PHONY: lint format
 
 help:
-	@echo "make db-build   Build database"
 	@echo "make run-app    Start Streamlit app"
 	@echo "make test       Run pytest"
 	@echo "make lint       Run ruff linter"
 	@echo "make format     Run ruff formatter"
 	@echo "make clean      Remove caches"
-
-db-build:
-	$(PY) -m src.db_buiding.build_db
 
 run-app:
 	streamlit run $(APP)

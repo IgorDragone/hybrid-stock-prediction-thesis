@@ -8,12 +8,8 @@ from datetime import datetime
 from pathlib import Path
 import pandas as pd
 
-from src.data.config import (
-    START_DATE,
-    END_DATE,
-    TICKERS,
+from src.db_buiding.config import (
     FRED_SERIES,
-    PROCESSED_DIR,
     FUNDAMENTALS_LAG_DAYS,
     MACRO_LAG_DAYS,        
     AV_API_KEY,
@@ -22,10 +18,10 @@ from src.data.config import (
     RAW_MACRO_DIR,
 )
 
-from src.data.prices import fetch_prices
-from src.data.technicals import technical_indicators
-from src.data.macro import fetch_macro_fred
-from src.data.fundamentals_av import fetch_quarterly_fundamentals_av
+from src.db_buiding.prices import fetch_prices
+from src.db_buiding.technicals import technical_indicators
+from src.db_buiding.macro import fetch_macro_fred
+from src.db_buiding.fundamentals_av import fetch_quarterly_fundamentals_av
 
 
 logger = logging.getLogger(__name__)
@@ -239,20 +235,3 @@ def build_database(
     panel = pd.concat(all_frames, ignore_index=True).sort_values(["date", "ticker"])
     panel.to_parquet(out_path, index=False)
     logger.info("Saved database to %s", out_path)
-
-
-def main():
-    logger.info("Building database for %d tickers", len(TICKERS))
-    out_file = PROCESSED_DIR / "financial_database.parquet"
-    build_database(
-        tickers=TICKERS,
-        start=START_DATE,
-        end=END_DATE,
-        out_path=out_file,
-        force_refresh_prices=False,
-        force_refresh_macro=False,
-    )
-
-
-if __name__ == "__main__":
-    main()
