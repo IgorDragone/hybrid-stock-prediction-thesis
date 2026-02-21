@@ -7,13 +7,12 @@ supervised learning based on forward returns and cross-sectional ranking.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 from typing import Optional, Tuple
 
 import numpy as np
 import pandas as pd
-
 
 logger = logging.getLogger(__name__)
 if not logging.getLogger().handlers:

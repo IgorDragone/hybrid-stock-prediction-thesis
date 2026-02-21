@@ -1,5 +1,4 @@
 import streamlit as st
-
 from ui_components import status_box
 
 

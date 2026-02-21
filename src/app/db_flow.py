@@ -1,7 +1,5 @@
 import streamlit as st
 
-from ui_components import status_box
-
 
 def render(mode: str):
     st.session_state.db_mode = st.radio(

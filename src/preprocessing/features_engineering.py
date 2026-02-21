@@ -8,9 +8,9 @@ This module derives:
 """
 
 import logging
+
 import numpy as np
 import pandas as pd
-
 
 logger = logging.getLogger(__name__)
 if not logging.getLogger().handlers:
@@ -50,6 +50,13 @@ def _tercile_bucket_cs(df: pd.DataFrame, date_col: str, col: str, labels=("low",
         include_lowest=True,
     )
     return buckets.astype("category")
+
+
+def _first_available_col(df: pd.DataFrame, candidates: list[str]) -> str | None:
+    for col in candidates:
+        if col in df.columns:
+            return col
+    return None
 
 
 def _macro_regime_from_signs(cpi_trend: pd.Series, gdp_trend: pd.Series) -> pd.Series:
@@ -112,56 +119,80 @@ def engineer_features(
     df = df.sort_values([date_col, ticker_col]).reset_index(drop=True)
 
     # 1) MACRO TRENDS
+    # Monthly macro features (aligned to end-of-month in DB build)
+    df["cpi_yoy"] = df.groupby(ticker_col)["CPIAUCSL"].pct_change(12)
+    df["ip_yoy"] = df.groupby(ticker_col)["INDPRO"].pct_change(12)
 
-    # Using trading-day approximations:
-    # ~12 months ≈ 252 trading days 
-    # ~6 months  ≈ 126 trading days
+    df["slope_10y2y"] = df["DGS10"] - df["DGS2"]
+    df["curve_inverted"] = (df["slope_10y2y"] < 0).astype("int8")
 
-    # Deltas (level changes)
-    df["cpi_delta_12m"] = df["CPIAUCSL"] - df.groupby(ticker_col)["CPIAUCSL"].shift(252)
-    df["rate_delta_6m"] = df["FEDFUNDS"] - df.groupby(ticker_col)["FEDFUNDS"].shift(126)
-    df["gdp_delta_4q"] = df["GDP"] - df.groupby(ticker_col)["GDP"].shift(252)
+    df["stress_level"] = df["STLFSI4"]
+    df["risk_off"] = (df["stress_level"] > 0.5).astype("int8")
 
-    df["cpi_trend"] = _sign_with_tolerance(df["cpi_delta_12m"])
-    df["rate_trend"] = _sign_with_tolerance(df["rate_delta_6m"])
-    df["gdp_trend"] = _sign_with_tolerance(df["gdp_delta_4q"])
+    # Growth–inflation regimes (analysis only)
+    df["growth_up"] = df["ip_yoy"] > 0
+    cpi_roll = df.groupby(ticker_col)["cpi_yoy"].transform(lambda s: s.rolling(60, min_periods=12).mean())
+    df["inflation_up"] = df["cpi_yoy"] > cpi_roll
 
-    # Optional but recommended: replace 0 (flat) with last non-zero to keep regimes consistent
-    df["cpi_trend"] = _fill_zeros_with_last_nonzero(df["cpi_trend"])
-    df["gdp_trend"] = _fill_zeros_with_last_nonzero(df["gdp_trend"])
-    df["rate_trend"] = _fill_zeros_with_last_nonzero(df["rate_trend"])
-
-    df["macro_regime"] = _macro_regime_from_signs(df["cpi_trend"], df["gdp_trend"])
-    
-    # Drop helper deltas to stay tidy
-    df.drop(columns=["cpi_delta_12m", "rate_delta_6m", "gdp_delta_4q"], inplace=True)
+    df["macro_regime"] = np.select(
+        [
+            df["growth_up"] & (~df["inflation_up"]),
+            df["growth_up"] & df["inflation_up"],
+            (~df["growth_up"]) & df["inflation_up"],
+            (~df["growth_up"]) & (~df["inflation_up"]),
+        ],
+        ["goldilocks", "reflation", "stagflation", "deflation"],
+        default="unknown",
+    ).astype("category")
 
     # 2) FUNDAMENTALS (CS buckets)
     
     # Buckets per date: low/mid/high
-    df["margin_bucket"] = _tercile_bucket_cs(df, date_col, "net_margin")
+    margin_col = _first_available_col(df, ["operating_margin", "gross_margin", "net_margin"])
+    if margin_col:
+        df["margin_bucket"] = _tercile_bucket_cs(df, date_col, margin_col)
+    else:
+        df["margin_bucket"] = pd.Series([pd.NA] * len(df), index=df.index, dtype="object")
     df["profitability_bucket"] = _tercile_bucket_cs(df, date_col, "roe")
     df["leverage_bucket"] = _tercile_bucket_cs(df, date_col, "debt_to_equity")
 
     # Flags
-    df["is_profitable"] = (df["net_margin"] > 0).astype("int8")
+    if margin_col:
+        df["is_profitable"] = (df[margin_col] > 0).astype("int8")
+    else:
+        df["is_profitable"] = pd.Series([pd.NA] * len(df), index=df.index, dtype="Int64")
 
     # Cross-sectional medians
-    rev_growth_med = df.groupby(date_col)["revenue_growth_qoq"].transform("median")
+    growth_col = _first_available_col(df, ["revenue_growth_yoy", "revenue_growth_qoq"])
+    if growth_col:
+        rev_growth_med = df.groupby(date_col)[growth_col].transform("median")
+    else:
+        rev_growth_med = pd.Series([pd.NA] * len(df), index=df.index, dtype="float64")
     dte_med = df.groupby(date_col)["debt_to_equity"].transform("median")
 
-    df["is_high_growth"] = (df["revenue_growth_qoq"] > rev_growth_med).astype("int8")
+    if growth_col:
+        df["is_high_growth"] = (df[growth_col] > rev_growth_med).astype("int8")
+    else:
+        df["is_high_growth"] = pd.Series([pd.NA] * len(df), index=df.index, dtype="Int64")
     df["is_high_leverage"] = (df["debt_to_equity"] > dte_med).astype("int8")
+
+    # Fundamental deltas (YoY)
+    if "roe" in df.columns:
+        df["delta_roe_yoy"] = df.groupby(ticker_col)["roe"].transform(lambda s: s - s.shift(4))
+    else:
+        df["delta_roe_yoy"] = pd.Series([pd.NA] * len(df), index=df.index, dtype="float64")
 
 
     # 3) TECHNICAL (states)
-   
-    # RSI state: -1 oversold, 0 neutral, +1 overbought
-    rsi = df["rsi_14"].astype("float64")
-    df["rsi_state"] = pd.Series(
-        np.where(rsi < 30, -1, np.where(rsi > 70, 1, 0)),
-        index=df.index
-    ).astype("int8")
+    if "rsi_14" in df.columns:
+        # RSI state: -1 oversold, 0 neutral, +1 overbought
+        rsi = df["rsi_14"].astype("float64")
+        df["rsi_state"] = pd.Series(
+            np.where(rsi < 30, -1, np.where(rsi > 70, 1, 0)),
+            index=df.index
+        ).astype("int8")
+    else:
+        df["rsi_state"] = pd.Series([pd.NA] * len(df), index=df.index, dtype="Int64")
 
     # Trend state: bull if adj_close > sma_200, else bear
     # If sma_200 is NaN (warm-up), keep NA (do not force 0/1)

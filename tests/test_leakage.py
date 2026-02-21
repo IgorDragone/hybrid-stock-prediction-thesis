@@ -1,6 +1,6 @@
 import pandas as pd
 
-from src.db_buiding.technicals import technical_indicators
+from src.db_building.technicals import technical_indicators
 
 
 def test_fundamentals_effective_date_no_leakage():

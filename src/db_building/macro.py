@@ -8,7 +8,12 @@ import pandas as pd
 from pandas_datareader import data as web
 
 
-def _macro_cache_path(series: list[str], start: str, end: str, cache_dir: Path | str | None) -> Path:
+def _macro_cache_path(
+    series: list[str],
+    start: str,
+    end: str,
+    cache_dir: Path | str | None,
+) -> Path | None:
     """
     Cache file name that depends on series + date range.
 
@@ -80,3 +85,13 @@ def fetch_macro_fred(
         macro.to_parquet(cache_path)
 
     return macro
+
+
+def align_macro_monthly(macro: pd.DataFrame) -> pd.DataFrame:
+    """
+    Align macro series to monthly frequency (end of month).
+    """
+    m = macro.copy()
+    m.index = pd.to_datetime(m.index)
+    m = m.sort_index()
+    return m.resample("M").last()

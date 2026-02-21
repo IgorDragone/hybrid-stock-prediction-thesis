@@ -1,19 +1,6 @@
-dataset_id: db_15t_10y
-tickers:
-  - AAPL
-  - MSFT
-  - NVDA
-  - JPM
-  - BAC
-  - GS
-  - AMZN
-  - NKE
-  - MCD
-  - JNJ
-  - PFE
-  - MRK
-  - XOM
-  - CVX
-  - COP
-start_date: "2016-01-01"
+dataset_id: master_45t_20y
+purpose: master_db_build
+universe_path: configs/universe.yaml
+master_years: 20
+start_date: "2006-01-01"
 end_date: "2025-12-31"

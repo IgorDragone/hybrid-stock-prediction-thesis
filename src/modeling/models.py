@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import List, Tuple
+
 import numpy as np
 import pandas as pd
-
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
-from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
 
 @dataclass(frozen=True)

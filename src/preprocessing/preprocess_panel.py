@@ -8,13 +8,12 @@ panel integrity (sorted, unique (date, ticker)).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import logging
-from typing import Optional, Sequence, Dict, Tuple, List
+from dataclasses import dataclass, field
+from typing import Dict, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
-
 
 logger = logging.getLogger(__name__)
 if not logging.getLogger().handlers:

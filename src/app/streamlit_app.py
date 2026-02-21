@@ -1,8 +1,8 @@
 import logging
-import streamlit as st
+
 import main_page
 import selection_page
-
+import streamlit as st
 
 logger = logging.getLogger(__name__)
 if not logging.getLogger().handlers:

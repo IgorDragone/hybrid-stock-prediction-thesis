@@ -1,0 +1,64 @@
+sectors:
+  - sector: Consumer Discretionary
+    tickers:
+      - AMZN
+      - TSLA
+      - NKE
+      - MCD
+      - SBUX
+  - sector: Consumer Staples
+    tickers:
+      - KO
+      - PEP
+      - PG
+      - WMT
+      - COST
+  - sector: Energy
+    tickers:
+      - XOM
+      - CVX
+      - COP
+      - SHEL
+      - TTE
+  - sector: Financials
+    tickers:
+      - JPM
+      - BAC
+      - GS
+      - MS
+      - AXP
+  - sector: Health Care
+    tickers:
+      - JNJ
+      - PFE
+      - MRK
+      - UNH
+      - ABBV
+  - sector: Industrials
+    tickers:
+      - BA
+      - CAT
+      - GE
+      - MMM
+      - UNP
+  - sector: Technology
+    tickers:
+      - AAPL
+      - MSFT
+      - NVDA
+      - GOOGL
+      - META
+  - sector: Real Estate
+    tickers:
+      - PLD
+      - AMT
+      - SPG
+      - PSA
+      - EQIX
+  - sector: Utilities
+    tickers:
+      - NEE
+      - DUK
+      - SO
+      - D
+      - AEP

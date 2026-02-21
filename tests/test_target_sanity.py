@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 
 from src.preprocessing.target_construction import TargetConfig, construct_target
@@ -6,7 +5,6 @@ from src.preprocessing.target_construction import TargetConfig, construct_target
 
 def test_target_sanity_distribution_and_monotonicity():
     dates = pd.date_range("2020-01-01", periods=8, freq="D")
-    tickers = ["AAA", "BBB", "CCC"]
     rows = []
     for i, d in enumerate(dates):
         rows.append((d, "AAA", 100 + i * 2.0))
