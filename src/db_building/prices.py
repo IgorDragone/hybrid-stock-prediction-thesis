@@ -52,6 +52,8 @@ def fetch_prices(
         pd.DataFrame: DataFrame with columns ['open', 'high', 'low', 'close', 'adj_close', 'volume'] indexed by date
     """
     cache_path = _prices_cache_path(ticker, cache_dir)
+    start_ts = pd.to_datetime(start)
+    end_ts = pd.to_datetime(end)
 
     # Check cache
     if use_cache and cache_path is not None and cache_path.exists() and not force_refresh:
@@ -59,7 +61,8 @@ def fetch_prices(
         df.index = pd.to_datetime(df.index)
         df.index.name = "date"
         df = df.sort_index()
-        return df.loc[start:end]
+        if df.index.min() <= start_ts and df.index.max() >= end_ts:
+            return df.loc[start:end]
 
     # Fetch from Yahoo Finance
     df = yf.download(
