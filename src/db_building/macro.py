@@ -89,9 +89,16 @@ def fetch_macro_fred(
 
 def align_macro_monthly(macro: pd.DataFrame) -> pd.DataFrame:
     """
-    Align macro series to monthly frequency (end of month).
+    Align macro series to monthly frequency (end of month) and derive YoY growth.
     """
     m = macro.copy()
     m.index = pd.to_datetime(m.index)
     m = m.sort_index()
-    return m.resample("M").last()
+    m = m.resample("M").last()
+
+    if "CPIAUCSL" in m.columns:
+        m["cpi_yoy"] = m["CPIAUCSL"].pct_change(12)
+    if "INDPRO" in m.columns:
+        m["ip_yoy"] = m["INDPRO"].pct_change(12)
+
+    return m

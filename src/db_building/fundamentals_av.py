@@ -113,7 +113,7 @@ def fetch_quarterly_fundamentals_av(
             - fiscalDateEnding (datetime)
             - roe, roa
             - operating_margin, gross_margin
-            - revenue_growth_yoy, earnings_growth_yoy
+            - revenue_growth_yoy, earnings_growth_yoy, delta_roe_yoy
             - debt_to_equity, interest_coverage
             - asset_turnover, fcf_assets
 
@@ -192,7 +192,9 @@ def fetch_quarterly_fundamentals_av(
 
     out = pd.DataFrame({"fiscalDateEnding": q["fiscalDateEnding"]})
 
-    out["roe"] = net_income / total_equity
+    valid_equity = total_equity > 0
+    valid_interest_expense = interest_expense > 0 
+    out["roe"] = (net_income / total_equity).where(valid_equity)
     out["roa"] = net_income / total_assets
 
     out["operating_margin"] = operating_income / revenue
@@ -201,11 +203,12 @@ def fetch_quarterly_fundamentals_av(
     out["revenue_growth_yoy"] = revenue.pct_change(4)
     out["earnings_growth_yoy"] = net_income.pct_change(4)
 
-    out["debt_to_equity"] = total_debt / total_equity
-    out["interest_coverage"] = ebit / interest_expense.abs()
+    out["debt_to_equity"] = (total_debt / total_equity).where(valid_equity)
+    out["interest_coverage"] = (ebit / interest_expense).where(valid_interest_expense)
 
     out["asset_turnover"] = revenue / total_assets
     out["fcf_assets"] = fcf / total_assets
+    out["delta_roe_yoy"] = out["roe"] - out["roe"].shift(4)
 
     out = out.dropna(subset=["fiscalDateEnding"]).sort_values("fiscalDateEnding")
     out = out.dropna(axis=1, how="all")

@@ -1,8 +1,8 @@
-# src/preprocessing/preprocess_panel.py
+# src/preprocessing/preprocessing.py
 """
 Preprocessing utilities for a daily long-format panel dataset.
 
-The module applies domain-aware stabilization (winsorization/clipping),
+The module applies domain-aware stabilization (clipping),
 macro forward-fill, and feature transformations while preserving
 panel integrity (sorted, unique (date, ticker)).
 """
@@ -39,8 +39,9 @@ class DomainClipConfig:
         roe_bounds (Tuple[float, float]): min/max bounds for return on equity
         roa_bounds (Tuple[float, float]): min/max bounds for return on assets
         debt_to_equity_bounds (Optional[Tuple[float, float]]): min/max bounds for debt to equity ratio
-        current_ratio_bounds (Optional[Tuple[float, float]]): min/max bounds for current ratio
-        extra_bounds (Dict[str, Tuple[float, float]]): additional column-specific bounds
+        interest_coverage_bounds (Optional[Tuple[float, float]]): min/max bounds for interest coverage
+        asset_turnover_bounds (Optional[Tuple[float, float]]): min/max bounds for asset turnover
+        fcf_assets_bounds (Optional[Tuple[float, float]]): min/max bounds for fcf/assets
     """
     # Growth rates: asymmetrically bounded (base effects)
     growth_bounds: Tuple[float, float] = (-0.5, 2.0)  # [-50%, +200%]
@@ -51,14 +52,14 @@ class DomainClipConfig:
     # ROE/ROA can spike when equity/assets are small/negative. Clip to reasonable ranges.
     roe_bounds: Tuple[float, float] = (-2.0, 2.0)
     roa_bounds: Tuple[float, float] = (-1.0, 1.0)
+    delta_roe_bounds: Tuple[float, float] = (-1.0, 1.0)
 
     # Optional: leverage/ratios can be huge when denominator tiny; clip if desired.
     # Set to None to disable.
     debt_to_equity_bounds: Optional[Tuple[float, float]] = (0.0, 10.0)
-    current_ratio_bounds: Optional[Tuple[float, float]] = (0.0, 10.0)
-
-    # In case other columns need clipping
-    extra_bounds: Dict[str, Tuple[float, float]] = field(default_factory=dict)
+    interest_coverage_bounds: Optional[Tuple[float, float]] = (0.0, 20.0)
+    asset_turnover_bounds: Optional[Tuple[float, float]] = (0.0, 5.0)
+    fcf_assets_bounds: Optional[Tuple[float, float]] = (-0.5, 0.5)
 
 
 @dataclass(frozen=True)
@@ -68,9 +69,7 @@ class PreprocessConfig:
 
     Attributes:
         macro_ffill (bool): Whether to forward-fill macro variables.
-        winsorize_fundamentals_cs (bool): Apply cross-sectional winsorization.
         domain_clip (bool): Enable domain-aware clipping of ratios.
-        add_log_volume (bool): Add log-transformed trading volume.
         min_non_na_ratio (float): Minimum non-missing ratio to keep a column.
     """
     date_col: str = "date"
@@ -85,27 +84,15 @@ class PreprocessConfig:
     # Steps toggles
     replace_infs_with_nan: bool = True
     macro_ffill: bool = True
-
-    # Fundamental stabilization
-    winsorize_fundamentals_cs: bool = True
-    winsor_lower_q: float = 0.01
-    winsor_upper_q: float = 0.99
+    fundamentals_ffill: bool = True
 
     # Domain clipping
     domain_clip: bool = True
     domain_clip_config: DomainClipConfig = DomainClipConfig()
 
-    # Transformations
-    add_log_volume: bool = True
-    volume_col: str = "volume"
-    log_volume_col: str = "log_volume"
-
     # Column-level NaN pruning
+    prune_sparse_columns: bool = False
     min_non_na_ratio: float = 0.95
-
-    # Safety
-    enforce_sorted: bool = True
-    assert_unique_panel: bool = True
 
 
 # -----------------------------------------------
@@ -152,7 +139,7 @@ def _replace_infs(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _ffill_cols_within_ticker(
-    df: pd.DataFrame, date_col: str, ticker_col: str, cols: Sequence[str]
+    df: pd.DataFrame, ticker_col: str, cols: Sequence[str]
 ) -> pd.DataFrame:
     """
     Forward-fill selected columns within each ticker over time.
@@ -164,48 +151,8 @@ def _ffill_cols_within_ticker(
         return df
     
     out = df.copy()
-    # Sort so ffill respects temporal order within each ticker
-    out = out.sort_values([date_col, ticker_col])
     out[list(cols)] = out.groupby(ticker_col, group_keys=False)[list(cols)].ffill()
 
-    return out
-
-
-def _winsorize_cross_sectional(
-    df: pd.DataFrame,
-    date_col: str,
-    cols: Sequence[str],
-    lower_q: float,
-    upper_q: float,
-    min_points: int = 5,
-) -> pd.DataFrame:
-    """
-    Winsorize selected columns cross-sectionally, date by date.
-
-    For each date, values in each column are clipped to the [lower_q, upper_q]
-    quantiles computed across tickers. This stabilizes noisy ratios while
-    preserving time-series structure.
-    """
-    if not cols:
-        return df
-    if not (0.0 <= lower_q < upper_q <= 1.0):
-        raise ValueError("Quantiles must satisfy 0 <= lower_q < upper_q <= 1.")
-
-    out = df.copy()
-
-    def _clip_group(g: pd.DataFrame) -> pd.DataFrame:
-        gg = g.copy()
-        for c in cols:
-            s = gg[c]
-            # Avoid unstable quantiles when too few observations exist for that date
-            if s.notna().sum() < min_points:
-                continue
-            lo = s.quantile(lower_q)
-            hi = s.quantile(upper_q)
-            gg[c] = s.clip(lo, hi)
-        return gg
-
-    out = out.groupby(date_col, group_keys=False).apply(_clip_group)
     return out
 
 
@@ -228,6 +175,77 @@ def _prune_sparse_columns(df: pd.DataFrame, min_non_na_ratio: float) -> pd.DataF
     return df[keep].copy()
 
 
+def _winsorize_cross_sectional(
+    df: pd.DataFrame,
+    date_col: str,
+    cols: Sequence[str],
+    lower_q: float,
+    upper_q: float,
+    min_points: int = 5,
+) -> pd.DataFrame:
+    """
+    Winsorize selected columns cross-sectionally, date by date.
+
+    For each date, values in each column are clipped to the [lower_q, upper_q]
+    quantiles computed across tickers. This stabilizes noisy ratios while
+    preserving time-series structure.
+    """
+    if not cols:
+        return df
+    if not (0.0 <= lower_q < upper_q <= 1.0):
+        raise ValueError("Quantiles must satisfy 0 <= lower_q < upper_q <= 1.")
+    out = df.copy()
+
+    def _clip_group(group_df: pd.DataFrame) -> pd.DataFrame:
+        clipped = group_df.copy()
+        for col in cols:
+            series = clipped[col]
+            # Avoid unstable quantiles when too few observations exist for that date
+            if series.notna().sum() < min_points:
+                continue
+            lower = series.quantile(lower_q)
+            upper = series.quantile(upper_q)
+            clipped[col] = series.clip(lower, upper)
+        return clipped
+
+    return out.groupby(date_col, group_keys=False).apply(_clip_group)
+
+
+def winsorize_fundamentals_cs(
+    df: pd.DataFrame,
+    *,
+    date_col: str,
+    fundamental_cols: Sequence[str],
+    growth_cols: Sequence[str],
+    lower_q: float,
+    upper_q: float,
+    growth_lower_q: float,
+    growth_upper_q: float,
+) -> pd.DataFrame:
+    """
+    Cross-sectional winsorization for fundamentals, intended to run on EOM data.
+    """
+    cols_default = [c for c in fundamental_cols if c not in growth_cols]
+    out = df.copy()
+    if cols_default:
+        out = _winsorize_cross_sectional(
+            out,
+            date_col=date_col,
+            cols=cols_default,
+            lower_q=lower_q,
+            upper_q=upper_q,
+        )
+    if growth_cols:
+        out = _winsorize_cross_sectional(
+            out,
+            date_col=date_col,
+            cols=list(growth_cols),
+            lower_q=growth_lower_q,
+            upper_q=growth_upper_q,
+        )
+    return out
+
+
 #-----------------------------------------------
 # Main preprocessing function
 #-----------------------------------------------
@@ -244,10 +262,8 @@ def preprocess_panel(df: pd.DataFrame, config: PreprocessConfig = PreprocessConf
         3) Replace +/-inf with NaN (numeric columns).
         4) Resolve column groups (explicit lists).
         5) Forward-fill macro columns within each ticker.
-        6) Cross-sectional winsorization of fundamental ratios (per date).
-        7) Domain-aware clipping of selected ratios (optional).
-        8) Add log-volume feature (optional).
-        9) Prune columns with excessive missing values.
+        6) Domain-aware clipping of selected ratios (optional).
+        7) Prune columns with excessive missing values.
 
     Args:
         df (pd.DataFrame): Long-format panel with at least (date, ticker).
@@ -263,12 +279,10 @@ def preprocess_panel(df: pd.DataFrame, config: PreprocessConfig = PreprocessConf
     out = _ensure_datetime(out, config.date_col)
 
     # As we need to forward-fill and do cross-sectional ops, ensure sortedness
-    if config.enforce_sorted:
-        out = out.sort_values([config.date_col, config.ticker_col])
+    out = out.sort_values([config.date_col, config.ticker_col])
 
     # Very quick uniqueness check, as DB build should guarantee this
-    if config.assert_unique_panel:
-        _assert_unique_panel(out, config.date_col, config.ticker_col)
+    _assert_unique_panel(out, config.date_col, config.ticker_col)
 
     # Safety: replace possible infs, derived from ratios (e.g, div by zero), with NaN
     if config.replace_infs_with_nan:
@@ -287,14 +301,15 @@ def preprocess_panel(df: pd.DataFrame, config: PreprocessConfig = PreprocessConf
 
     # 1) Macro forward-fill (post effective_date already ensured upstream)
     if config.macro_ffill and macro_cols:
-        out = _ffill_cols_within_ticker(out, config.date_col, config.ticker_col, macro_cols)
+        out = _ffill_cols_within_ticker(out, config.ticker_col, macro_cols)
 
-    # 2) Cross-sectional winsorization for fundamentals (stabilizes ratios)
-    if config.winsorize_fundamentals_cs and fundamental_cols:
-        out = _winsorize_cross_sectional(
-            out, date_col=config.date_col, cols=fundamental_cols,
-            lower_q=config.winsor_lower_q, upper_q=config.winsor_upper_q
-        )
+    # 2) Fundamentals forward-fill (post effective_date already ensured upstream)
+    if config.fundamentals_ffill and fundamental_cols:
+        # Preserve NaNs caused by sanity rules (e.g., equity/interest issues)
+        no_ffill = {"roe", "debt_to_equity", "interest_coverage"}
+        ffill_cols = [c for c in fundamental_cols if c not in no_ffill]
+        if ffill_cols:
+            out = _ffill_cols_within_ticker(out, config.ticker_col, ffill_cols)
 
     # 3) Domain-aware clipping (recommended)
     if config.domain_clip:
@@ -313,26 +328,31 @@ def preprocess_panel(df: pd.DataFrame, config: PreprocessConfig = PreprocessConf
             out["roe"] = out["roe"].clip(*dc.roe_bounds)
         if "roa" in out.columns:
             out["roa"] = out["roa"].clip(*dc.roa_bounds)
+        if "delta_roe_yoy" in out.columns:
+            out["delta_roe_yoy"] = out["delta_roe_yoy"].clip(*dc.delta_roe_bounds)
 
         # leverage / liquidity (optional)
         if dc.debt_to_equity_bounds is not None and "debt_to_equity" in out.columns:
             out["debt_to_equity"] = out["debt_to_equity"].clip(*dc.debt_to_equity_bounds)
-        if dc.current_ratio_bounds is not None and "current_ratio" in out.columns:
-            out["current_ratio"] = out["current_ratio"].clip(*dc.current_ratio_bounds)
+        if dc.interest_coverage_bounds is not None and "interest_coverage" in out.columns:
+            out["interest_coverage"] = out["interest_coverage"].clip(*dc.interest_coverage_bounds)
+        if dc.asset_turnover_bounds is not None and "asset_turnover" in out.columns:
+            out["asset_turnover"] = out["asset_turnover"].clip(*dc.asset_turnover_bounds)
+        if dc.fcf_assets_bounds is not None and "fcf_assets" in out.columns:
+            out["fcf_assets"] = out["fcf_assets"].clip(*dc.fcf_assets_bounds)
 
-        # extras
-        for col, (lo, hi) in dc.extra_bounds.items():
-            if col in out.columns:
-                out[col] = out[col].clip(lo, hi)
-
-    # 4) Add log(volume)
-    if config.add_log_volume and config.volume_col in out.columns:
-        out[config.log_volume_col] = np.log1p(out[config.volume_col])
-
-    # 5) Column-level NaN pruning (avoid dropping rows at this stage)
-    out = _prune_sparse_columns(out, config.min_non_na_ratio)
+    # 4) Column-level NaN pruning (disabled by default)
+    if config.prune_sparse_columns:
+        out = _prune_sparse_columns(out, config.min_non_na_ratio)
 
     # Final sort/reset
     out = out.sort_values([config.date_col, config.ticker_col]).reset_index(drop=True)
     logger.info("Preprocess panel complete: %d rows, %d columns", out.shape[0], out.shape[1])
     return out
+
+
+def preprocess_daily(df: pd.DataFrame, config: PreprocessConfig = PreprocessConfig()) -> pd.DataFrame:
+    """
+    Alias for preprocess_panel to make the daily scope explicit.
+    """
+    return preprocess_panel(df, config=config)
