@@ -228,6 +228,11 @@ def _winsorize_cross_sectional(
     if not (0.0 <= lower_q < upper_q <= 1.0):
         raise ValueError("Quantiles must satisfy 0 <= lower_q < upper_q <= 1.")
     out = df.copy()
+    if date_col not in out.columns:
+        if date_col in out.index.names:
+            out = out.reset_index()
+        else:
+            out = out.reset_index().rename(columns={"index": date_col})
 
     def _clip_group(group_df: pd.DataFrame) -> pd.DataFrame:
         clipped = group_df.copy()
@@ -340,7 +345,7 @@ def preprocess_daily_panel(df: pd.DataFrame, config: Optional[PreprocessConfig] 
     # 2) Fundamentals forward-fill (post effective_date already ensured upstream)
     if cfg.fundamentals_ffill and fundamental_cols:
         # Preserve NaNs caused by sanity rules (e.g., equity/interest issues)
-        no_ffill = {"roe", "debt_to_equity", "interest_coverage"}
+        no_ffill = {"roe", "debt_to_equity", "interest_coverage", "delta_roe_yoy"}
         ffill_cols = [c for c in fundamental_cols if c not in no_ffill]
         if ffill_cols:
             out = _ffill_cols_within_ticker(out, cfg.ticker_col, ffill_cols)
