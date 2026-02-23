@@ -102,16 +102,18 @@ def engineer_features(
     )
     df_eom["inflation_up"] = df_eom["cpi_yoy"] > cpi_roll
 
-    df_eom["macro_regime"] = np.select(
-        [
-            df_eom["growth_up"] & (~df_eom["inflation_up"]),
-            df_eom["growth_up"] & df_eom["inflation_up"],
-            (~df_eom["growth_up"]) & df_eom["inflation_up"],
-            (~df_eom["growth_up"]) & (~df_eom["inflation_up"]),
-        ],
-        ["goldilocks", "reflation", "stagflation", "deflation"],
-        default="unknown",
-    ).astype("category")
+    df_eom["macro_regime"] = pd.Categorical(
+        np.select(
+            [
+                df_eom["growth_up"] & (~df_eom["inflation_up"]),
+                df_eom["growth_up"] & df_eom["inflation_up"],
+                (~df_eom["growth_up"]) & df_eom["inflation_up"],
+                (~df_eom["growth_up"]) & (~df_eom["inflation_up"]),
+            ],
+            ["goldilocks", "reflation", "stagflation", "deflation"],
+            default="unknown",
+        )
+    )
 
     # 2) FUNDAMENTALS (EOM)
     # Fundamental percentile-rank features (model-ready)

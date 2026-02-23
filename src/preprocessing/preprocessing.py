@@ -76,10 +76,36 @@ class PreprocessConfig:
     ticker_col: str = "ticker"
 
     # Column groups
-    macro_cols: Sequence[str]
-    fundamental_cols: Sequence[str]
-    growth_cols: Sequence[str]
-    margin_cols: Sequence[str]
+    macro_cols: Sequence[str] = (
+        "CPIAUCSL",
+        "INDPRO",
+        "DGS10",
+        "DGS2",
+        "STLFSI4",
+        "cpi_yoy",
+        "ip_yoy",
+    )
+    fundamental_cols: Sequence[str] = (
+        "operating_margin",
+        "gross_margin",
+        "roe",
+        "roa",
+        "debt_to_equity",
+        "interest_coverage",
+        "revenue_growth_yoy",
+        "earnings_growth_yoy",
+        "delta_roe_yoy",
+        "asset_turnover",
+        "fcf_assets",
+    )
+    growth_cols: Sequence[str] = (
+        "revenue_growth_yoy",
+        "earnings_growth_yoy",
+    )
+    margin_cols: Sequence[str] = (
+        "operating_margin",
+        "gross_margin",
+    )
 
     # Steps toggles
     replace_infs_with_nan: bool = True

@@ -15,7 +15,7 @@ import pandas as pd
 
 from .features_engineering import engineer_features
 from .preprocessing import PreprocessConfig, preprocess_daily_panel, winsorize_fundamentals_cs
-from .target_construction import TargetConfig, construct_target
+from .target_construction import TargetConfig, construct_target, make_model_ready
 
 
 def select_model_ready_columns(
@@ -58,7 +58,7 @@ def select_model_ready_columns(
     target_cols = ["target_3m", "target_1m"]
     return_cols = []
     if include_returns:
-        return_cols = ["fwd_ret_1m", "fwd_ret_3m", "fwd_ret_6m"]
+        return_cols = ["fwd_ret_1m", "fwd_ret_3m"]
 
     keep = [
         c for c in base_cols + macro_cols + fund_pr_cols + tech_pr_cols + target_cols + return_cols
@@ -149,6 +149,7 @@ def build_feature_panel(
         df_eom = construct_target(df_eom, config=target_config)
         if stages_path is not None:
             df_model_ready = select_model_ready_columns(df_eom)
+            df_model_ready = make_model_ready(df_model_ready)
             df_model_ready.to_parquet(stages_path / "panel_model_ready.parquet", index=False)
     
     if drop_raws:
