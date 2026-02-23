@@ -92,10 +92,8 @@ def engineer_features(
     # Monthly macro features (aligned to end-of-month in DB build)
     # cpi_yoy/ip_yoy are derived in db_building.macro and merged into the daily panel.
     df_eom["slope_10y2y"] = df_eom["DGS10"] - df_eom["DGS2"]
-    df_eom["curve_inverted"] = (df_eom["slope_10y2y"] < 0).astype("int8")
 
     df_eom["stress_index"] = df_eom["STLFSI4"]
-    df_eom["risk_off_flag"] = (df_eom["stress_index"] > 0.5).astype("int8")
 
     # Growth–inflation regimes (analysis only)
     df_eom["growth_up"] = df_eom["ip_yoy"] > 0
@@ -114,7 +112,6 @@ def engineer_features(
         ["goldilocks", "reflation", "stagflation", "deflation"],
         default="unknown",
     ).astype("category")
-    df_eom["macro_regime_label"] = df_eom["macro_regime"]
 
     # 2) FUNDAMENTALS (EOM)
     # Fundamental percentile-rank features (model-ready)
@@ -150,6 +147,12 @@ def engineer_features(
             date_col,
             "asset_turnover",
         ).fillna(0.5)
+    if "fcf_assets" in df_eom.columns:
+        df_eom["fcf_assets_pr"] = _cs_percentile_or_zscore(
+            df_eom,
+            date_col,
+            "fcf_assets",
+        ).fillna(0.5)
 
     # 3) TECHNICAL percentile-rank features (model-ready)
 
@@ -157,55 +160,21 @@ def engineer_features(
         df_eom["vol_ratio"] = df_eom["volatility_20d"] / df_eom["volatility_60d"]
 
     if "mom_12m" in df_eom.columns:
-        df_eom["mom12_pr"] = _cs_percentile_or_zscore(df_eom, date_col, "mom_12m")
+        df_eom["mom12_pr"] = _cs_percentile_or_zscore(df_eom, date_col, "mom_12m").fillna(0.5)
     if "mom_6m" in df_eom.columns:
-        df_eom["mom6_pr"] = _cs_percentile_or_zscore(df_eom, date_col, "mom_6m")
+        df_eom["mom6_pr"] = _cs_percentile_or_zscore(df_eom, date_col, "mom_6m").fillna(0.5)
     if "mom_3m" in df_eom.columns:
-        df_eom["mom3_pr"] = _cs_percentile_or_zscore(df_eom, date_col, "mom_3m")
+        df_eom["mom3_pr"] = _cs_percentile_or_zscore(df_eom, date_col, "mom_3m").fillna(0.5)
     if "price_sma_200" in df_eom.columns:
-        df_eom["trend_ratio_pr"] = _cs_percentile_or_zscore(df_eom, date_col, "price_sma_200")
+        df_eom["trend_ratio_pr"] = _cs_percentile_or_zscore(df_eom, date_col, "price_sma_200").fillna(0.5)
     if "volatility_60d" in df_eom.columns:
-        df_eom["vol_pr"] = _cs_percentile_or_zscore(df_eom.assign(_tmp=-df_eom["volatility_60d"]), date_col, "_tmp")
+        df_eom["vol_pr"] = _cs_percentile_or_zscore(
+            df_eom.assign(_tmp=-df_eom["volatility_60d"]),
+            date_col,
+            "_tmp",
+        ).fillna(0.5)
     if "vol_ratio" in df_eom.columns:
-        df_eom["vol_ratio_pr"] = _cs_percentile_or_zscore(df_eom, date_col, "vol_ratio")
-
-    tech_pr_cols = [
-        "mom12_pr",
-        "mom6_pr",
-        "mom3_pr",
-        "trend_ratio_pr",
-        "vol_pr",
-        "vol_ratio_pr",
-    ]
-    tech_pr_cols = [c for c in tech_pr_cols if c in df_eom.columns]
-    for col in tech_pr_cols:
-        df_eom[col] = df_eom[col].fillna(0.5)
-
-    macro_cols = [
-        "slope_10y2y",
-        "curve_inverted",
-        "stress_index",
-        "risk_off_flag",
-        "growth_up",
-        "inflation_up",
-        "macro_regime",
-        "macro_regime_label",
-    ]
-    macro_cols = [c for c in macro_cols if c in df_eom.columns]
-
-    fund_pr_cols = [
-        "roe_pr",
-        "roa_pr",
-        "operating_margin_pr",
-        "gross_margin_pr",
-        "revenue_growth_pr",
-        "earnings_growth_pr",
-        "delta_roe_pr",
-        "debt_pr",
-        "interest_coverage_pr",
-        "asset_turnover_pr",
-    ]
-    fund_pr_cols = [c for c in fund_pr_cols if c in df_eom.columns]
+        df_eom["vol_ratio_pr"] = _cs_percentile_or_zscore(df_eom, date_col, "vol_ratio").fillna(0.5)
 
     logger.info("Feature engineering complete: %d rows, %d columns", df_eom.shape[0], df_eom.shape[1])
     return df_eom

@@ -92,7 +92,14 @@ class PreprocessConfig:
 
     # Column-level NaN pruning
     prune_sparse_columns: bool = False
-    min_non_na_ratio: float = 0.95
+    min_non_na_ratio: float = 0.90
+
+    # Cross-sectional winsorization (applied post-EOM in the pipeline)
+    winsorize_fundamentals_cs: bool = True
+    winsor_lower_q: float = 0.01
+    winsor_upper_q: float = 0.99
+    growth_winsor_lower_q: float = 0.02
+    growth_winsor_upper_q: float = 0.98
 
 
 # -----------------------------------------------
@@ -249,7 +256,7 @@ def winsorize_fundamentals_cs(
 #-----------------------------------------------
 # Main preprocessing function
 #-----------------------------------------------
-def preprocess_panel(df: pd.DataFrame, config: PreprocessConfig = PreprocessConfig()) -> pd.DataFrame:
+def preprocess_daily_panel(df: pd.DataFrame, config: Optional[PreprocessConfig] = None) -> pd.DataFrame:
     """
     Preprocess a daily long-format panel DataFrame.
 
@@ -273,47 +280,48 @@ def preprocess_panel(df: pd.DataFrame, config: PreprocessConfig = PreprocessConf
         pd.DataFrame: Processed panel sorted by (date, ticker) with a fresh integer index.
     """
     logger.info("Preprocess panel: %d rows, %d columns", df.shape[0], df.shape[1])
-    _check_required_columns(df, [config.date_col, config.ticker_col])
+    cfg = config or PreprocessConfig()
+    _check_required_columns(df, [cfg.date_col, cfg.ticker_col])
 
     out = df.copy()
-    out = _ensure_datetime(out, config.date_col)
+    out = _ensure_datetime(out, cfg.date_col)
 
     # As we need to forward-fill and do cross-sectional ops, ensure sortedness
-    out = out.sort_values([config.date_col, config.ticker_col])
+    out = out.sort_values([cfg.date_col, cfg.ticker_col])
 
     # Very quick uniqueness check, as DB build should guarantee this
-    _assert_unique_panel(out, config.date_col, config.ticker_col)
+    _assert_unique_panel(out, cfg.date_col, cfg.ticker_col)
 
     # Safety: replace possible infs, derived from ratios (e.g, div by zero), with NaN
-    if config.replace_infs_with_nan:
+    if cfg.replace_infs_with_nan:
         out = _replace_infs(out)
 
     # Resolve column groups
-    if config.macro_cols is None or config.fundamental_cols is None \
-       or config.growth_cols is None or config.margin_cols is None:
+    if cfg.macro_cols is None or cfg.fundamental_cols is None \
+       or cfg.growth_cols is None or cfg.margin_cols is None:
         raise ValueError("Column groups must be explicitly provided in PreprocessConfig.")
 
-    macro_cols = list(config.macro_cols)
-    fundamental_cols = list(config.fundamental_cols)
-    growth_cols = list(config.growth_cols)
-    margin_cols = list(config.margin_cols)
+    macro_cols = list(cfg.macro_cols)
+    fundamental_cols = list(cfg.fundamental_cols)
+    growth_cols = list(cfg.growth_cols)
+    margin_cols = list(cfg.margin_cols)
     
 
     # 1) Macro forward-fill (post effective_date already ensured upstream)
-    if config.macro_ffill and macro_cols:
-        out = _ffill_cols_within_ticker(out, config.ticker_col, macro_cols)
+    if cfg.macro_ffill and macro_cols:
+        out = _ffill_cols_within_ticker(out, cfg.ticker_col, macro_cols)
 
     # 2) Fundamentals forward-fill (post effective_date already ensured upstream)
-    if config.fundamentals_ffill and fundamental_cols:
+    if cfg.fundamentals_ffill and fundamental_cols:
         # Preserve NaNs caused by sanity rules (e.g., equity/interest issues)
         no_ffill = {"roe", "debt_to_equity", "interest_coverage"}
         ffill_cols = [c for c in fundamental_cols if c not in no_ffill]
         if ffill_cols:
-            out = _ffill_cols_within_ticker(out, config.ticker_col, ffill_cols)
+            out = _ffill_cols_within_ticker(out, cfg.ticker_col, ffill_cols)
 
     # 3) Domain-aware clipping (recommended)
-    if config.domain_clip:
-        dc = config.domain_clip_config
+    if cfg.domain_clip:
+        dc = cfg.domain_clip_config
 
         # growth
         if growth_cols:
@@ -342,17 +350,10 @@ def preprocess_panel(df: pd.DataFrame, config: PreprocessConfig = PreprocessConf
             out["fcf_assets"] = out["fcf_assets"].clip(*dc.fcf_assets_bounds)
 
     # 4) Column-level NaN pruning (disabled by default)
-    if config.prune_sparse_columns:
-        out = _prune_sparse_columns(out, config.min_non_na_ratio)
+    if cfg.prune_sparse_columns:
+        out = _prune_sparse_columns(out, cfg.min_non_na_ratio)
 
     # Final sort/reset
-    out = out.sort_values([config.date_col, config.ticker_col]).reset_index(drop=True)
+    out = out.sort_values([cfg.date_col, cfg.ticker_col]).reset_index(drop=True)
     logger.info("Preprocess panel complete: %d rows, %d columns", out.shape[0], out.shape[1])
     return out
-
-
-def preprocess_daily(df: pd.DataFrame, config: PreprocessConfig = PreprocessConfig()) -> pd.DataFrame:
-    """
-    Alias for preprocess_panel to make the daily scope explicit.
-    """
-    return preprocess_panel(df, config=config)
