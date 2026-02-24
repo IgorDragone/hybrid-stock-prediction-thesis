@@ -10,6 +10,7 @@ from sklearn.linear_model import Ridge
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
+from src.modeling.registry import save_model_bundle
 
 @dataclass(frozen=True)
 class ModelIO:
@@ -79,3 +80,18 @@ def fit_predict_oos_scores(
     oos_df = pd.concat(out_parts, axis=0).sort_values([io.date_col, io.ticker_col]).reset_index(drop=True)
     folds_df = pd.DataFrame(fold_rows)
     return oos_df, folds_df
+
+
+def save_trained_model(
+    model_id: str,
+    model,
+    metrics: dict | None = None,
+    config: dict | None = None,
+) -> None:
+    """Persist a trained model and its metadata to the model registry."""
+    save_model_bundle(
+        model_id=model_id,
+        model=model,
+        metrics=metrics,
+        config=config,
+    )

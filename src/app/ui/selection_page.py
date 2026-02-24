@@ -1,6 +1,7 @@
 import streamlit as st
 from . import compare_flow, db_flow, model_flow, portfolio_flow, summary_page
 from .ui_components import apply_style, status_box
+from src.modeling.registry import list_models
 
 
 def _init_flow_state():
@@ -23,11 +24,7 @@ def _init_flow_state():
     if "model_type" not in st.session_state:
         st.session_state.model_type = None
     if "available_models" not in st.session_state:
-        st.session_state.available_models = [
-            "baseline_xgb_v1",
-            "lstm_sequence_v2",
-            "transformer_momentum_v1",
-        ]
+        st.session_state.available_models = list_models()
     if "model_db_map" not in st.session_state:
         st.session_state.model_db_map = {}
     if "model_pending" not in st.session_state:
@@ -79,8 +76,8 @@ def _model_page():
     with tab_select:
         st.session_state.model_mode = st.radio(
             "Choose model path",
-            ["Load existing model", "Create new model"],
-            index=0 if st.session_state.model_mode == "Load existing model" else 1,
+            ["Load existing model"],
+            index=0,
         )
         model_flow.render(st.session_state.model_mode)
     with tab_compare:

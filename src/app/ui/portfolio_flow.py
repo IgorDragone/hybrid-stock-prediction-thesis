@@ -1,7 +1,9 @@
 import streamlit as st
 from .ui_components import header, status_box
+from src.config import load_universe
 
 MAX_PORTFOLIOS = 3
+MAX_TICKERS = 15
 
 
 def reset_current_portfolio():
@@ -65,40 +67,34 @@ def portfolio_builder(summary_fn):
         value=st.session_state.portfolio_name,
     )
 
-    sector_map = {
-        "Tech": ["AAPL", "MSFT", "GOOGL", "META", "NVDA"],
-        "Consumer": ["AMZN", "KO"],
-        "Healthcare": ["JNJ"],
-        "Energy": ["XOM"],
-        "Auto": ["TSLA"],
-    }
-    sectors = list(sector_map.keys())
-    selected_sector = st.selectbox(
-        "Filter by sector",
-        ["All"] + sectors,
-        index=0,
+    universe = load_universe()
+    sector_map = {entry.get("sector", "Unknown"): entry.get("tickers", []) for entry in universe}
+    sectors = sorted(sector_map.keys())
+    selected_sectors = st.multiselect(
+        "Filter by sector (optional)",
+        sectors,
+        default=[],
     )
-    if selected_sector == "All":
-        available = sorted({t for v in sector_map.values() for t in v})
+    if selected_sectors:
+        available = sorted({t for s in selected_sectors for t in sector_map.get(s, [])})
     else:
-        available = sector_map[selected_sector]
+        available = sorted({t for v in sector_map.values() for t in v})
     available = sorted(set(available + st.session_state.portfolio_tickers))
 
     tickers = st.multiselect(
-        "Select tickers (max 8)",
+        f"Select tickers (recommended 8–{MAX_TICKERS})",
         available,
         default=st.session_state.portfolio_tickers,
         key="portfolio_ticker_select",
     )
-    if len(tickers) > 8:
-        st.warning("Maximum 8 tickers allowed. Please remove extras.")
-        tickers = tickers[:8]
+    if len(tickers) > MAX_TICKERS:
+        st.warning(f"Maximum {MAX_TICKERS} tickers allowed. Please remove extras.")
     st.session_state.portfolio_tickers = tickers
 
     st.session_state.rebalance_freq = st.selectbox(
         "Rebalancing frequency",
-        ["Monthly", "Quarterly"],
-        index=0 if st.session_state.rebalance_freq == "Monthly" else 1,
+        ["Monthly"],
+        index=0,
     )
     summary_fn()
 
@@ -106,7 +102,7 @@ def portfolio_builder(summary_fn):
     with col1:
         if st.button("Back", use_container_width=True):
             st.session_state.ui_page = "portfolio_home"
-    invalid_count = len(st.session_state.portfolio_tickers) == 0 or len(st.session_state.portfolio_tickers) > 8
+    invalid_count = len(st.session_state.portfolio_tickers) == 0 or len(st.session_state.portfolio_tickers) > MAX_TICKERS
     with col2:
         if st.button(
             "Continue to Models",

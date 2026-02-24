@@ -1,30 +1,45 @@
 import streamlit as st
 from .ui_components import status_box
+from src.app.logic.models import list_model_entries, model_equity_curve
 
 
 def compare_section():
     st.subheader("Model Comparison (Backtest Preview)")
-    status_box(
-        "Compare multiple models before choosing one. Metrics and charts are placeholders."
-    )
-    model_options = [
-        "baseline_xgb_v1",
-        "lstm_sequence_v2",
-        "transformer_momentum_v1",
-    ]
-    selected = st.multiselect("Models to compare", model_options)
+    entries = list_model_entries()
+    if not entries:
+        status_box("No saved models found. Train or load models to compare.")
+        return
+
+    model_options = [m.get("id") for m in entries]
+    selected = st.multiselect("Models to compare", model_options, default=model_options)
     if selected:
-        st.dataframe(
-            {
-                "model": selected,
-                "CAGR": ["12.4%", "10.1%", "13.0%"][: len(selected)],
-                "Sharpe": ["1.05", "0.92", "1.10"][: len(selected)],
-                "Max DD": ["-18%", "-21%", "-16%"][: len(selected)],
-            }
-        )
-        st.line_chart(
-            {
-                "Baseline": [1.0, 1.02, 1.04, 1.03, 1.06],
-                "Alt": [1.0, 1.01, 1.03, 1.02, 1.05],
-            }
-        )
+        rows = []
+        for entry in entries:
+            if entry.get("id") not in selected:
+                continue
+            metrics = entry.get("metrics", {})
+            rows.append(
+                {
+                    "model": entry.get("id"),
+                    "cagr": metrics.get("cagr"),
+                    "sharpe": metrics.get("sharpe"),
+                    "max_drawdown": metrics.get("max_drawdown"),
+                    "hit_rate": metrics.get("hit_rate"),
+                }
+            )
+        st.dataframe(rows, use_container_width=True)
+
+        curves = {}
+        for model_id in selected:
+            curve = model_equity_curve(model_id)
+            if curve:
+                curves[model_id] = curve
+        if curves:
+            st.markdown("### Equity Curves")
+            for model_id, curve in curves.items():
+                st.line_chart(
+                    {"equity": curve["equity"]},
+                    use_container_width=True,
+                )
+        else:
+            status_box("No equity curves found for selected models.")

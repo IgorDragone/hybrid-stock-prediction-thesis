@@ -11,6 +11,9 @@ def render(mode: str):
 
     if mode == "Load existing model":
         model_list = st.session_state.available_models
+        if not model_list:
+            st.warning("No saved models found.")
+            return
         st.session_state.model_candidate = st.selectbox(
             "Available models",
             model_list,
@@ -22,6 +25,8 @@ def render(mode: str):
             )
             st.session_state.ui_page = "summary_page"
     else:
+        st.info("Model creation is temporarily disabled. Use an existing model.")
+        return
         st.session_state.model_type = st.selectbox(
             "Model type",
             ["XGBoost", "Random Forest", "LSTM", "Transformer"],
