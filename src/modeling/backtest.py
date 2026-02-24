@@ -11,81 +11,103 @@ import pandas as pd
 class BacktestConfig:
     date_col: str = "date"
     ticker_col: str = "ticker"
-    ret_1d_col: str = "ret_1d"
-    rebalance_step: int = 21      # ~monthly
-    q: float = 0.3                # top/bottom quantile
-    lag_weights_by_1d: bool = True
+    ret_1m_col: str = "fwd_ret_1m"
+    top_k: int = 5
+    overlay_enabled: bool = False
+    stress_col: str = "stress_index"
+    stress_threshold: float = 0.5
+    risk_off_exposure: float = 0.6
+    cash_return: float = 0.0
 
 
-def _rebalance_dates(df: pd.DataFrame, date_col: str, step: int) -> list[pd.Timestamp]:
-    dates = df[date_col].drop_duplicates().sort_values().to_list()
-    return dates[::step]
+def _top_k_by_score(x: pd.DataFrame, score_col: str, k: int) -> pd.DataFrame:
+    x = x.dropna(subset=[score_col])
+    return x.sort_values(score_col, ascending=False).head(k)
 
 
-def _weights_for_date(x: pd.DataFrame, score_col: str, q: float) -> pd.Series:
-    q_low = x[score_col].quantile(q)
-    q_high = x[score_col].quantile(1 - q)
-    sig = np.where(x[score_col] >= q_high, 1, np.where(x[score_col] <= q_low, -1, 0))
-
-    w = np.zeros(len(x), dtype=float)
-    n_long = (sig == 1).sum()
-    n_short = (sig == -1).sum()
-
-    if n_long > 0:
-        w[sig == 1] = 1.0 / n_long
-    # if long-only, we don't short anything
-    if n_short > 0:
-        w[sig == -1] = -1.0 / n_short
-
-    return pd.Series(w, index=x.index)
-
-
-def build_monthly_weights(df: pd.DataFrame, score_col: str, cfg: BacktestConfig) -> pd.DataFrame:
-    d = df.copy()
+def _portfolio_returns(
+    df_scores: pd.DataFrame,
+    score_col: str,
+    cfg: BacktestConfig,
+) -> pd.Series:
+    d = df_scores.copy()
     d[cfg.date_col] = pd.to_datetime(d[cfg.date_col])
-    d = d.sort_values([cfg.date_col, cfg.ticker_col])
 
-    for c in [cfg.date_col, cfg.ticker_col, cfg.ret_1d_col, score_col]:
+    for c in [cfg.date_col, cfg.ticker_col, cfg.ret_1m_col, score_col]:
         if c not in d.columns:
             raise ValueError(f"Missing required column: {c}")
 
-    reb_dates = _rebalance_dates(d, cfg.date_col, cfg.rebalance_step)
-    reb_set = set(reb_dates)
-
-    d["weight"] = np.nan
-    mask = d[cfg.date_col].isin(reb_set)
-
-    d.loc[mask, "weight"] = (
-        d.loc[mask]
-         .groupby(cfg.date_col, group_keys=False)
-         .apply(lambda x: _weights_for_date(x, score_col, cfg.q))
+    port = (
+        d.groupby(cfg.date_col, group_keys=False)
+        .apply(lambda x: _top_k_by_score(x, score_col, cfg.top_k)[cfg.ret_1m_col].mean())
     )
-
-    d["weight"] = d.groupby(cfg.ticker_col)["weight"].ffill().fillna(0.0)
-    return d
-
-
-def portfolio_returns_from_weights(df_w: pd.DataFrame, cfg: BacktestConfig) -> pd.Series:
-    d = df_w.sort_values([cfg.ticker_col, cfg.date_col]).copy()
-
-    if cfg.lag_weights_by_1d:
-        d["w_eff"] = d.groupby(cfg.ticker_col)["weight"].shift(1).fillna(0.0)
-    else:
-        d["w_eff"] = d["weight"]
-
-    port = d.groupby(cfg.date_col).apply(lambda x: (x["w_eff"] * x[cfg.ret_1d_col]).sum())
     port.name = "port_ret"
-    return port
+    return _apply_overlay(port, d, cfg)
 
 
-def equity_curve(port_ret: pd.Series) -> pd.Series:
+def _apply_overlay(
+    port_ret: pd.Series, df_scores: pd.DataFrame, cfg: BacktestConfig
+) -> pd.Series:
+    if not cfg.overlay_enabled:
+        return port_ret
+    if cfg.stress_col not in df_scores.columns:
+        raise ValueError(f"Missing required column for overlay: {cfg.stress_col}")
+
+    stress = df_scores.groupby(cfg.date_col)[cfg.stress_col].first()
+    exposure = np.where(stress > cfg.stress_threshold, cfg.risk_off_exposure, 1.0)
+    exposure = pd.Series(exposure, index=stress.index).reindex(port_ret.index)
+    return exposure * port_ret + (1.0 - exposure) * cfg.cash_return
+
+
+def equal_weight_returns(df: pd.DataFrame, cfg: BacktestConfig) -> pd.Series:
+    """Equal-weight universe return (monthly mean of fwd_ret_1m)."""
+    d = df.copy()
+    d[cfg.date_col] = pd.to_datetime(d[cfg.date_col])
+    if cfg.ret_1m_col not in d.columns:
+        raise ValueError(f"Missing required column: {cfg.ret_1m_col}")
+    port = d.groupby(cfg.date_col)[cfg.ret_1m_col].mean()
+    port.name = "port_ret"
+    return _apply_overlay(port, d, cfg)
+
+
+def _turnover(top_k_df: pd.DataFrame, cfg: BacktestConfig) -> pd.Series:
+    top_k_df = top_k_df.sort_values([cfg.date_col, cfg.ticker_col])
+    top_k_df["month"] = top_k_df[cfg.date_col].dt.to_period("M")
+    by_month = top_k_df.groupby("month")[cfg.ticker_col].apply(set)
+
+    turnovers = []
+    prev = None
+    for m, names in by_month.items():
+        if prev is None:
+            turnovers.append(0.0)
+        else:
+            overlap = len(prev & names)
+            turnovers.append(1.0 - overlap / cfg.top_k)
+        prev = names
+    return pd.Series(turnovers, index=by_month.index, name="turnover")
+
+
+def _equity_curve(port_ret: pd.Series) -> pd.Series:
     return (1.0 + port_ret.fillna(0.0)).cumprod()
 
 
-def turnover(df_w: pd.DataFrame, cfg: BacktestConfig) -> pd.Series:
-    d = df_w.sort_values([cfg.ticker_col, cfg.date_col]).copy()
-    chg = d.groupby(cfg.ticker_col)["weight"].diff().abs().fillna(0.0)
-    return chg.groupby(d[cfg.date_col]).mean()
+def _hit_rate(
+    df_scores: pd.DataFrame,
+    score_col: str,
+    cfg: BacktestConfig,
+) -> float:
+    d = df_scores.copy()
+    d[cfg.date_col] = pd.to_datetime(d[cfg.date_col])
+
+    def _month_hit(x: pd.DataFrame) -> float:
+        pred = _top_k_by_score(x, score_col, cfg.top_k)[cfg.ticker_col].tolist()
+        actual = _top_k_by_score(x, cfg.ret_1m_col, cfg.top_k)[cfg.ticker_col].tolist()
+        if not pred:
+            return np.nan
+        return len(set(pred) & set(actual)) / cfg.top_k
+
+    hit = d.groupby(cfg.date_col).apply(_month_hit)
+    return float(hit.mean())
 
 
 def backtest_from_scores(
@@ -93,17 +115,24 @@ def backtest_from_scores(
     score_cols: Dict[str, str],
     cfg: BacktestConfig,
 ) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]:
-    """Monthly-rebalanced long-short backtest for multiple score columns."""
+    """Monthly long-only top-K backtest for multiple score columns."""
     summary_rows = []
     artifacts: Dict[str, pd.DataFrame] = {}
 
     for model_name, score_col in score_cols.items():
-        df_w = build_monthly_weights(df_scores, score_col, cfg)
-        pr = portfolio_returns_from_weights(df_w, cfg)
-        eq = equity_curve(pr)
-        to = turnover(df_w, cfg)
+        d = df_scores.copy()
+        d[cfg.date_col] = pd.to_datetime(d[cfg.date_col])
 
-        art = pd.DataFrame({"port_ret": pr, "equity": eq, "turnover": to}).dropna(subset=["port_ret"])
+        top_k_rows = (
+            d.groupby(cfg.date_col, group_keys=False)
+            .apply(lambda x: _top_k_by_score(x, score_col, cfg.top_k))
+        )
+        port_ret = _portfolio_returns(d, score_col, cfg)
+        eq = _equity_curve(port_ret)
+        to = _turnover(top_k_rows, cfg)
+
+        art = pd.DataFrame({"port_ret": port_ret, "equity": eq}).dropna(subset=["port_ret"])
+        art = art.join(to, how="left")
         artifacts[model_name] = art
 
         r = art["port_ret"]
@@ -111,17 +140,19 @@ def backtest_from_scores(
         max_dd = (e / e.cummax() - 1.0).min()
 
         vol = r.std()
-        sharpe_like = (r.mean() / vol) if vol != 0 else np.nan
+        sharpe = (r.mean() / vol) * np.sqrt(12) if vol != 0 else np.nan
+        cagr = (e.iloc[-1] ** (12 / len(e)) - 1.0) if len(e) > 1 else np.nan
 
         summary_rows.append({
             "model": model_name,
-            "mean_daily_return": float(r.mean()),
-            "vol_daily": float(vol),
-            "sharpe_like": float(sharpe_like),
-            "hit_ratio": float((r > 0).mean()),
+            "mean_monthly_return": float(r.mean()),
+            "vol_monthly": float(vol),
+            "sharpe": float(sharpe),
+            "cagr": float(cagr),
+            "hit_rate": _hit_rate(d, score_col, cfg),
             "max_drawdown": float(max_dd),
             "mean_turnover": float(art["turnover"].mean()),
         })
 
-    summary = pd.DataFrame(summary_rows).sort_values("sharpe_like", ascending=False).reset_index(drop=True)
+    summary = pd.DataFrame(summary_rows).sort_values("sharpe", ascending=False).reset_index(drop=True)
     return summary, artifacts

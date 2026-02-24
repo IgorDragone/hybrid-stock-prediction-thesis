@@ -28,7 +28,6 @@ def build_ridge_pipeline(alpha: float = 1.0, random_state: int = 42) -> Pipeline
     ])
 
 
-
 def build_tree_model(
     random_state: int = 42,
     max_depth: int = 3,
