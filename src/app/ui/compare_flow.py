@@ -1,5 +1,5 @@
 import streamlit as st
-from ui_components import status_box
+from .ui_components import status_box
 
 
 def compare_section():

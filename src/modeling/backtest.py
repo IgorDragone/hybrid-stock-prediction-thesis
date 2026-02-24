@@ -72,23 +72,44 @@ def equal_weight_returns(df: pd.DataFrame, cfg: BacktestConfig) -> pd.Series:
 
 def _turnover(top_k_df: pd.DataFrame, cfg: BacktestConfig) -> pd.Series:
     top_k_df = top_k_df.sort_values([cfg.date_col, cfg.ticker_col])
-    top_k_df["month"] = top_k_df[cfg.date_col].dt.to_period("M")
-    by_month = top_k_df.groupby("month")[cfg.ticker_col].apply(set)
+    by_date = top_k_df.groupby(cfg.date_col)[cfg.ticker_col].apply(set)
 
     turnovers = []
     prev = None
-    for m, names in by_month.items():
+    for _, names in by_date.items():
         if prev is None:
             turnovers.append(0.0)
         else:
             overlap = len(prev & names)
             turnovers.append(1.0 - overlap / cfg.top_k)
         prev = names
-    return pd.Series(turnovers, index=by_month.index, name="turnover")
+    return pd.Series(turnovers, index=by_date.index, name="turnover")
 
 
 def _equity_curve(port_ret: pd.Series) -> pd.Series:
     return (1.0 + port_ret.fillna(0.0)).cumprod()
+
+
+def summarize_portfolio(
+    port_ret: pd.Series,
+    turnover: pd.Series | None = None,
+) -> dict:
+    """Compute summary metrics for a monthly return series."""
+    port_ret = port_ret.dropna()
+    eq = _equity_curve(port_ret)
+    max_dd = (eq / eq.cummax() - 1.0).min()
+    vol = port_ret.std()
+    sharpe = (port_ret.mean() / vol) * np.sqrt(12) if vol != 0 else np.nan
+    cagr = (eq.iloc[-1] ** (12 / len(eq)) - 1.0) if len(eq) > 1 else np.nan
+    mean_turnover = float(turnover.mean()) if turnover is not None else np.nan
+    return {
+        "mean_monthly_return": float(port_ret.mean()),
+        "vol_monthly": float(vol),
+        "sharpe": float(sharpe),
+        "cagr": float(cagr),
+        "max_drawdown": float(max_dd),
+        "mean_turnover": mean_turnover,
+    }
 
 
 def _hit_rate(

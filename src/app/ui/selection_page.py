@@ -1,10 +1,6 @@
-import compare_flow
-import db_flow
-import model_flow
-import portfolio_flow
 import streamlit as st
-import summary_page
-from ui_components import apply_style, status_box
+from . import compare_flow, db_flow, model_flow, portfolio_flow, summary_page
+from .ui_components import apply_style, status_box
 
 
 def _init_flow_state():

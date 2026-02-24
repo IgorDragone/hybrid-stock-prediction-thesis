@@ -1,5 +1,5 @@
 import streamlit as st
-from ui_components import header, status_box
+from .ui_components import header, status_box
 
 MAX_PORTFOLIOS = 3
 
