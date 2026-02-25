@@ -1,6 +1,7 @@
 import streamlit as st
 from . import compare_flow, db_flow, model_flow, portfolio_flow, summary_page
 from .ui_components import apply_style, status_box
+from src.app.logic.portfolio import load_portfolios
 from src.modeling.registry import list_models
 
 
@@ -14,6 +15,8 @@ def _init_flow_state():
         st.session_state.portfolio_tickers = []
     if "rebalance_freq" not in st.session_state:
         st.session_state.rebalance_freq = "Monthly"
+    if "portfolio_cash" not in st.session_state:
+        st.session_state.portfolio_cash = 1000.0
 
     if "model_mode" not in st.session_state:
         st.session_state.model_mode = "Load existing model"
@@ -42,7 +45,7 @@ def _init_flow_state():
         st.session_state.db_confirmed = False
 
     if "saved_portfolios" not in st.session_state:
-        st.session_state.saved_portfolios = []
+        st.session_state.saved_portfolios = load_portfolios()
 
 
 def _summary_box(show_model: bool = False):
@@ -56,7 +59,7 @@ def _summary_box(show_model: bool = False):
         "<b>Summary</b>",
         f"Portfolio: {st.session_state.portfolio_name}",
         f"Tickers: {tickers}",
-        f"Rebalance: {st.session_state.rebalance_freq}",
+        f"Initial cash: {st.session_state.portfolio_cash:,.0f}",
     ]
     if show_model:
         lines.append(f"Model: {model_label}")

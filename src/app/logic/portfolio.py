@@ -7,6 +7,9 @@ from typing import Any
 
 import json
 
+from src.config import DATA_DIR
+
+PORTFOLIOS_PATH = DATA_DIR / "processed" / "app" / "portfolios.json"
 
 @dataclass(frozen=True)
 class Portfolio:
@@ -56,3 +59,19 @@ def equal_weight(tickers: list[str]) -> dict[str, float]:
         raise ValueError("Tickers list cannot be empty.")
     w = 1.0 / len(tickers)
     return {t: w for t in tickers}
+
+
+def load_portfolios(path: Path | str = PORTFOLIOS_PATH) -> list[dict[str, Any]]:
+    path = Path(path)
+    if not path.exists():
+        return []
+    payload = json.loads(path.read_text())
+    if not isinstance(payload, list):
+        raise ValueError("Portfolios file must contain a list.")
+    return payload
+
+
+def save_portfolios(portfolios: list[dict[str, Any]], path: Path | str = PORTFOLIOS_PATH) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(portfolios, indent=2))

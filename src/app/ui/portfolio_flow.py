@@ -1,5 +1,6 @@
 import streamlit as st
 from .ui_components import header, status_box
+from src.app.logic.portfolio import save_portfolios
 from src.config import load_universe
 
 MAX_PORTFOLIOS = 3
@@ -10,6 +11,7 @@ def reset_current_portfolio():
     st.session_state.portfolio_name = "My Portfolio"
     st.session_state.portfolio_tickers = []
     st.session_state.rebalance_freq = "Monthly"
+    st.session_state.portfolio_cash = 1000.0
     st.session_state.model_selected = None
     st.session_state.db_selected = None
 
@@ -17,7 +19,8 @@ def reset_current_portfolio():
 def load_portfolio(p):
     st.session_state.portfolio_name = p["name"]
     st.session_state.portfolio_tickers = p["tickers"]
-    st.session_state.rebalance_freq = p["rebalance"]
+    st.session_state.rebalance_freq = p.get("rebalance", "Monthly")
+    st.session_state.portfolio_cash = p.get("cash", 1000.0)
     st.session_state.model_selected = p["model"]
     st.session_state.db_selected = p["database"]
 
@@ -34,7 +37,7 @@ def portfolio_home():
             with col1:
                 st.markdown(
                     f"**{p['name']}** — {', '.join(p['tickers'])} | "
-                    f"{p['rebalance']} | model: {p['model']}"
+                    f"cash: {p.get('cash', 0):,.0f} | model: {p['model']}"
                 )
             with col2:
                 if st.button("Open", key=f"open_{idx}", use_container_width=True):
@@ -43,6 +46,7 @@ def portfolio_home():
             with col3:
                 if st.button("Delete", key=f"delete_{idx}", use_container_width=True):
                     st.session_state.saved_portfolios.pop(idx)
+                    save_portfolios(st.session_state.saved_portfolios)
                     st.rerun()
     else:
         status_box("No saved portfolios yet. Create a new one to get started.")
@@ -65,6 +69,13 @@ def portfolio_builder(summary_fn):
     st.session_state.portfolio_name = st.text_input(
         "Portfolio name",
         value=st.session_state.portfolio_name,
+    )
+    st.session_state.portfolio_cash = st.number_input(
+        "Initial cash (EUR)",
+        min_value=100.0,
+        max_value=1_000_000.0,
+        step=100.0,
+        value=float(st.session_state.portfolio_cash),
     )
 
     universe = load_universe()
@@ -91,11 +102,6 @@ def portfolio_builder(summary_fn):
         st.warning(f"Maximum {MAX_TICKERS} tickers allowed. Please remove extras.")
     st.session_state.portfolio_tickers = tickers
 
-    st.session_state.rebalance_freq = st.selectbox(
-        "Rebalancing frequency",
-        ["Monthly"],
-        index=0,
-    )
     summary_fn()
 
     col1, col2 = st.columns([1, 1])

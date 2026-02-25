@@ -1,5 +1,7 @@
 import streamlit as st
 from .ui_components import header, status_box
+from src.app.logic.portfolio import save_portfolios
+from src.app.logic.recommendations import score_portfolio
 
 MAX_PORTFOLIOS = 3
 
@@ -12,11 +14,20 @@ def summary_page(summary_fn):
     summary_fn(show_model=True)
 
     st.subheader("Decisions (Preview)")
-    st.markdown(
-        "- Placeholder: BUY AAPL, HOLD MSFT, SELL TSLA\n"
-        "- Placeholder: confidence 0.72\n"
-        "- Placeholder: next rebalance in 30 days"
-    )
+    try:
+        result = score_portfolio(
+            model_id=st.session_state.model_selected,
+            tickers=st.session_state.portfolio_tickers,
+            cash=st.session_state.portfolio_cash,
+        )
+        st.markdown(f"**As of:** {result['date'].date()}")
+        st.markdown(f"**Exposure:** {result['exposure']:.0%}")
+        if result.get("stress_index") is not None:
+            st.markdown(f"**Stress index:** {result['stress_index']:.2f}")
+        st.markdown(f"**Cash left:** {result['cash_left']:,.0f}")
+        st.dataframe(result["recommendations"], use_container_width=True)
+    except Exception as exc:  # noqa: BLE001
+        status_box(f"Unable to compute recommendations: {exc}")
 
     st.subheader("Save Portfolio")
     if len(st.session_state.saved_portfolios) >= MAX_PORTFOLIOS:
@@ -36,6 +47,7 @@ def summary_page(summary_fn):
             "name": st.session_state.portfolio_name,
             "tickers": st.session_state.portfolio_tickers,
             "rebalance": st.session_state.rebalance_freq,
+            "cash": st.session_state.portfolio_cash,
             "model": st.session_state.model_selected,
             "database": st.session_state.db_selected,
         }
@@ -43,6 +55,7 @@ def summary_page(summary_fn):
             existing.update(payload)
         else:
             st.session_state.saved_portfolios.append(payload)
+        save_portfolios(st.session_state.saved_portfolios)
         st.success("Portfolio saved.")
 
     col1, col2 = st.columns([1, 1])
