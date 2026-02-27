@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import json
-import joblib
+import pandas as pd
 
 from src.config import MODELS_DIR
 
@@ -42,6 +42,7 @@ def save_model_bundle(
     base_dir: Path | str = MODELS_DIR,
 ) -> ModelBundle:
     """Persist model artifacts and update the registry."""
+    import joblib
     base_dir = Path(base_dir)
     model_dir = base_dir / model_id
     model_dir.mkdir(parents=True, exist_ok=True)
@@ -86,16 +87,47 @@ def load_model_bundle(
     base_dir: Path | str = MODELS_DIR,
 ) -> tuple[Any | None, dict[str, Any], dict[str, Any]]:
     """Load model and metadata from disk."""
+    try:
+        import joblib
+    except ModuleNotFoundError:
+        joblib = None
     base_dir = Path(base_dir)
     model_dir = base_dir / model_id
     model_path = model_dir / "model.pkl"
     metrics_path = model_dir / "metrics.json"
     config_path = model_dir / "config.json"
 
-    model = joblib.load(model_path) if model_path.exists() else None
+    if joblib is not None and model_path.exists():
+        model = joblib.load(model_path)
+    else:
+        model = None
     metrics = json.loads(metrics_path.read_text()) if metrics_path.exists() else {}
     config = json.loads(config_path.read_text()) if config_path.exists() else {}
     return model, metrics, config
+
+
+def save_oos_scores(
+    model_id: str,
+    oos_df: Any,
+    base_dir: Path | str = MODELS_DIR,
+) -> Path:
+    """Persist out-of-sample scores for later UI filtering."""
+    base_dir = Path(base_dir)
+    model_dir = base_dir / model_id
+    model_dir.mkdir(parents=True, exist_ok=True)
+    path = model_dir / "oos_scores.parquet"
+    oos_df.to_parquet(path, index=False)
+    return path
+
+
+def load_oos_scores(
+    model_id: str,
+    base_dir: Path | str = MODELS_DIR,
+) -> Any | None:
+    path = Path(base_dir) / model_id / "oos_scores.parquet"
+    if not path.exists():
+        return None
+    return pd.read_parquet(path)
 
 
 def build_model_id(

@@ -35,13 +35,20 @@ def score_portfolio(
     cash: float,
     top_k: int | None = None,
 ) -> dict[str, Any]:
-    snap, latest_date = _load_snapshot(tickers)
-    if snap.empty:
+    min_global_pct = 0.3
+
+    snap_full, latest_date = _load_snapshot([])
+    if snap_full.empty:
+        raise ValueError("No data available for scoring.")
+    snap_subset = snap_full
+    if tickers:
+        snap_subset = snap_full[snap_full["ticker"].isin(tickers)].copy()
+    if snap_subset.empty:
         raise ValueError("No data available for selected tickers on latest date.")
 
     model, metrics, config = load_model_bundle(model_id)
     features = config.get("features") or [
-        c for c in snap.columns
+        c for c in snap_full.columns
         if c not in {
             "date",
             "ticker",
@@ -58,18 +65,33 @@ def score_portfolio(
 
     if model is None:
         # Baseline: momentum score
-        if "mom12_pr" not in snap.columns:
+        if "mom12_pr" not in snap_full.columns:
             raise ValueError("mom12_pr not available for baseline scoring.")
-        snap["score"] = snap["mom12_pr"]
+        snap_full["score"] = snap_full["mom12_pr"]
     else:
-        snap["score"] = model.predict(snap[features])
+        snap_full["score"] = model.predict(snap_full[features])
 
+    snap_full = snap_full.sort_values("score", ascending=False).copy()
+    snap_full["rank_global"] = np.arange(1, len(snap_full) + 1)
+    if len(snap_full) > 1:
+        snap_full["rank_pct_global"] = (snap_full["rank_global"] - 1) / (len(snap_full) - 1)
+    else:
+        snap_full["rank_pct_global"] = 0.0
+    snap_full["eligible"] = snap_full["rank_pct_global"] <= min_global_pct
+
+    snap = snap_full[snap_full["ticker"].isin(snap_subset["ticker"])].copy()
     snap = snap.sort_values("score", ascending=False).copy()
     snap["rank"] = np.arange(1, len(snap) + 1)
     if top_k is None:
         top_k = max(1, int(round(len(snap) * 0.4)))
     top_k = min(top_k, len(snap), 10)
-    snap["action"] = np.where(snap["rank"] <= top_k, "buy", "sell")
+    eligible = snap[snap["eligible"]].copy()
+    top_k = min(top_k, len(eligible))
+    if top_k > 0:
+        buy_tickers = eligible.head(top_k)["ticker"]
+        snap["action"] = np.where(snap["ticker"].isin(buy_tickers), "buy", "sell")
+    else:
+        snap["action"] = "sell"
 
     exposure = 1.0
     if "stress_index" in snap.columns:
@@ -78,12 +100,12 @@ def score_portfolio(
     else:
         stress = None
 
-    investable_cash = cash * exposure
+    investable_cash = cash * exposure if top_k > 0 else 0.0
     cash_left = cash - investable_cash
-    allocation = np.zeros(len(snap))
+    snap["allocation_eur"] = 0.0
     if top_k > 0:
-        allocation[:top_k] = investable_cash / top_k
-    snap["allocation_eur"] = allocation
+        per_buy = investable_cash / top_k
+        snap.loc[snap["action"] == "buy", "allocation_eur"] = per_buy
 
     recommendations = snap[["rank", "ticker", "action", "allocation_eur"]].copy()
     recommendations = recommendations.set_index("rank")

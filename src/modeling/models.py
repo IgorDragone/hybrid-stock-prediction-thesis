@@ -10,7 +10,8 @@ from sklearn.linear_model import Ridge
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from src.modeling.registry import save_model_bundle
+from src.config import MODELS_DIR
+from src.modeling.registry import save_model_bundle, save_oos_scores
 
 @dataclass(frozen=True)
 class ModelIO:
@@ -95,3 +96,16 @@ def save_trained_model(
         metrics=metrics,
         config=config,
     )
+
+
+def save_oos_scores_for_model(
+    model_id: str,
+    oos_df: pd.DataFrame,
+    score_col: str,
+) -> None:
+    """Store standardized OOS scores for UI filtering."""
+    keep_cols = ["date", "ticker", "fwd_ret_1m", "stress_index", score_col]
+    cols = [c for c in keep_cols if c in oos_df.columns]
+    out = oos_df[cols].copy()
+    out = out.rename(columns={score_col: "score"})
+    save_oos_scores(model_id, out, base_dir=MODELS_DIR)
