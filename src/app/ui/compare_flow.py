@@ -12,22 +12,33 @@ def compare_section():
         status_box("No saved models found. Train or load models to compare.")
         return
 
+    label_map = {
+        "baseline_mom": "Momentum Baseline",
+        "ridge": "Ridge (Linear)",
+        "hgb": "Gradient Boosting (HGB)",
+        "buy_hold_eqw": "Buy & Hold (Equal Weight)",
+    }
     model_options = [m.get("id") for m in entries]
     selected = st.multiselect("Models to compare", model_options, default=model_options)
     if selected:
         tickers = st.session_state.get("portfolio_tickers", [])
         if tickers:
             st.caption("Metrics computed on the selected ticker subset.")
-            with st.spinner("Computing subset backtest..."):
-                try:
-                    summary, curves_df = compare_on_subset(selected, tickers)
-                except Exception as exc:  # noqa: BLE001
-                    status_box(f"Unable to compute subset metrics: {exc}")
-                    return
+            if st.button("Run subset backtest", use_container_width=True):
+                with st.spinner("Computing subset backtest..."):
+                    try:
+                        summary, curves_df = _cached_compare_on_subset(tuple(selected), tuple(tickers))
+                    except Exception as exc:  # noqa: BLE001
+                        status_box(f"Unable to compute subset metrics: {exc}")
+                        return
+            else:
+                return
             if not summary.empty:
                 if "model" in summary.columns:
                     cols = ["model"] + [c for c in summary.columns if c != "model"]
                     summary = summary[cols]
+                if "model" in summary.columns:
+                    summary["model"] = summary["model"].map(lambda m: label_map.get(m, m))
                 st.dataframe(summary, use_container_width=True, hide_index=True)
             else:
                 status_box("No metrics available for the selected models.")
@@ -46,6 +57,9 @@ def compare_section():
                         "hit_rate": metrics.get("hit_rate"),
                     }
                 )
+            if rows:
+                for row in rows:
+                    row["model"] = label_map.get(row["model"], row["model"])
             st.dataframe(rows, use_container_width=True, hide_index=True)
 
         curves = {}
@@ -86,12 +100,17 @@ def compare_section():
                 .mark_line()
                 .encode(
                     x=alt.X("date:T", axis=alt.Axis(format="%Y", tickCount=8, title="Year")),
-                    y=alt.Y("equity:Q", axis=alt.Axis(title="Equity (EUR)")),
+                    y=alt.Y("equity:Q", axis=alt.Axis(title="Equity ($)")),
                     color=alt.Color("model:N", legend=alt.Legend(title="Model")),
                 )
                 .properties(height=300)
             )
             st.altair_chart(chart, use_container_width=True)
-            st.caption("X: year · Y: equity value (starting from 1000 EUR)")
+            st.caption("X: year · Y: equity value (starting from $1000)")
         else:
             status_box("No equity curves found for selected models.")
+
+
+@st.cache_data(show_spinner=False)
+def _cached_compare_on_subset(model_ids: tuple[str, ...], tickers: tuple[str, ...]):
+    return compare_on_subset(list(model_ids), list(tickers))

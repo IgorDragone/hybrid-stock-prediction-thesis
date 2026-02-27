@@ -13,19 +13,63 @@ def summary_page(summary_fn):
     )
     summary_fn(show_model=True)
 
-    st.subheader("Decisions (Preview)")
+    st.subheader("Decisions")
     try:
+        if not st.session_state.model_selected:
+            status_box("Select a model to generate portfolio decisions.")
+            return
         result = score_portfolio(
             model_id=st.session_state.model_selected,
             tickers=st.session_state.portfolio_tickers,
             cash=st.session_state.portfolio_cash,
         )
-        st.markdown(f"**As of:** {result['date'].date()}")
         st.markdown(f"**Exposure:** {result['exposure']:.0%}")
         if result.get("stress_index") is not None:
             st.markdown(f"**Stress index:** {result['stress_index']:.2f}")
-        st.markdown(f"**Cash left:** {result['cash_left']:,.0f}")
-        st.dataframe(result["recommendations"], use_container_width=True)
+        st.markdown(f"**Cash left:** ${result['cash_left']:,.0f}")
+
+        recs = result["recommendations"].copy()
+        buy_count = (recs["action"] == "BUY ✅").sum()
+        st.markdown(f"**Top‑K selected:** {buy_count} / {len(recs)}")
+        st.markdown("**Guardrail:** only top 30% global tickers are eligible")
+        if buy_count == 0:
+            status_box("No eligible tickers under the guardrail for this selection.")
+        recs = recs.rename(
+            columns={
+                "ticker": "Ticker",
+                "action": "Action",
+                "allocation_eur": "Allocation ($)",
+                "score": "Score",
+                "rank_pct": "Rank pct",
+                "rank_pct_global": "Global rank pct",
+            }
+        )
+        recs.index.name = "Rank"
+        recs["Allocation ($)"] = recs["Allocation ($)"].round(2)
+
+        rank_pct = recs["Global rank pct"] if "Global rank pct" in recs.columns else None
+        recs_display = recs.drop(columns=["Rank pct", "Global rank pct"], errors="ignore")
+
+        def _score_style(row):
+            styles = [""] * len(row)
+            if rank_pct is None or "Score" not in row.index:
+                return styles
+            pct = float(rank_pct.loc[row.name])
+            if pct <= 0.3:
+                color = "color: #2e7d32"
+            elif pct >= 0.7:
+                color = "color: #c62828"
+            else:
+                color = "color: #b26a00"
+            styles[row.index.get_loc("Score")] = color
+            return styles
+
+        styled = (
+            recs_display.style
+            .format({"Allocation ($)": "${:,.2f}", "Score": "{:.4f}"})
+            .apply(_score_style, axis=1)
+        )
+        st.dataframe(styled, use_container_width=True)
     except Exception as exc:  # noqa: BLE001
         status_box(f"Unable to compute recommendations: {exc}")
 

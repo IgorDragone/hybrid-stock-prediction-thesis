@@ -10,13 +10,20 @@ def render(mode: str):
     st.session_state.model_mode_prev = mode
 
     if mode == "Load existing model":
-        model_list = st.session_state.available_models
+        model_list = [m for m in st.session_state.available_models if m != "buy_hold_eqw"]
         if not model_list:
             st.warning("No saved models found.")
             return
+        label_map = {
+            "baseline_mom": "Momentum Baseline",
+            "ridge": "Ridge (Linear)",
+            "hgb": "Gradient Boosting (HGB)",
+        }
+        display = {mid: label_map.get(mid, mid) for mid in model_list}
         st.session_state.model_candidate = st.selectbox(
             "Available models",
             model_list,
+            format_func=lambda mid: display.get(mid, mid),
         )
         if st.button("Use this model", use_container_width=True, key="use_model_existing"):
             st.session_state.model_selected = st.session_state.model_candidate

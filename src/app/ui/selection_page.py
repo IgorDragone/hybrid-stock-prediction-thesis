@@ -2,6 +2,7 @@ import streamlit as st
 from . import compare_flow, db_flow, model_flow, portfolio_flow, summary_page
 from .ui_components import apply_style, status_box
 from src.app.logic.portfolio import load_portfolios
+from src.config import load_universe
 from src.modeling.registry import list_models
 
 
@@ -49,25 +50,38 @@ def _init_flow_state():
 
 
 def _summary_box(show_model: bool = False):
-    model_label = st.session_state.model_selected or "Yet to choose"
+    label_map = {
+        "baseline_mom": "Momentum Baseline",
+        "ridge": "Ridge (Linear)",
+        "hgb": "Gradient Boosting (HGB)",
+        "buy_hold_eqw": "Buy & Hold (Equal Weight)",
+    }
+    model_label = label_map.get(st.session_state.model_selected, st.session_state.model_selected) or "Yet to choose"
     tickers = (
         ", ".join(st.session_state.portfolio_tickers)
         if st.session_state.portfolio_tickers
         else "None"
     )
+    tickers_by_sector = []
+    if st.session_state.portfolio_tickers:
+        universe = load_universe()
+        sector_map = {entry.get("sector", "Unknown"): entry.get("tickers", []) for entry in universe}
+        for sector, sector_tickers in sorted(sector_map.items()):
+            selected = [t for t in sector_tickers if t in st.session_state.portfolio_tickers]
+            if selected:
+                tickers_by_sector.append(f"&nbsp;&nbsp;- {sector} ({len(selected)}): {', '.join(selected)}")
     lines = [
         "<b>Summary</b>",
         f"Portfolio: {st.session_state.portfolio_name}",
-        f"Tickers: {tickers}",
-        f"Initial cash: {st.session_state.portfolio_cash:,.0f}",
+        "Tickers:",
+        f"Initial cash: ${st.session_state.portfolio_cash:,.0f}",
     ]
+    if tickers_by_sector:
+        lines[3:3] = tickers_by_sector
+    else:
+        lines.insert(3, tickers)
     if show_model:
         lines.append(f"Model: {model_label}")
-        if st.session_state.model_selected:
-            db_label = st.session_state.db_selected or st.session_state.model_db_map.get(
-                st.session_state.model_selected, "Pending"
-            )
-            lines.append(f"Database used for training the model: {db_label}")
     status_box("<br>".join(lines))
 
 
@@ -77,12 +91,8 @@ def _model_page():
 
     tab_select, tab_compare = st.tabs(["Select Model", "Compare Models"])
     with tab_select:
-        st.session_state.model_mode = st.radio(
-            "Choose model path",
-            ["Load existing model"],
-            index=0,
-        )
-        model_flow.render(st.session_state.model_mode)
+        st.markdown("Pick one of the available models.")
+        model_flow.render("Load existing model")
     with tab_compare:
         compare_flow.compare_section()
 
