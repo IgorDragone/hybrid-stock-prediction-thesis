@@ -23,6 +23,8 @@ def summary_page(summary_fn):
             tickers=st.session_state.portfolio_tickers,
             cash=st.session_state.portfolio_cash,
         )
+        if result.get("model_loaded") is False:
+            status_box("Model could not be loaded (joblib missing). Using baseline score instead.")
         st.markdown(f"**Exposure:** {result['exposure']:.0%}")
         if result.get("stress_index") is not None:
             st.markdown(f"**Stress index:** {result['stress_index']:.2f}")

@@ -63,6 +63,7 @@ def score_portfolio(
         }
     ]
 
+    model_loaded = model is not None
     if model is None:
         # Baseline: momentum score
         if "mom12_pr" not in snap_full.columns:
@@ -120,6 +121,7 @@ def score_portfolio(
         "exposure": exposure,
         "stress_index": stress,
         "cash_left": cash_left,
+        "model_loaded": model_loaded,
         "recommendations": recommendations,
         "metrics": metrics,
     }
