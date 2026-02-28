@@ -3,16 +3,6 @@ import pandas as pd
 from src.db_building.technicals import technical_indicators
 
 
-def test_fundamentals_effective_date_no_leakage():
-    df = pd.DataFrame(
-        {
-            "date": pd.to_datetime(["2020-01-03", "2020-01-04", "2020-01-05"]),
-            "effective_date": pd.to_datetime(["2020-01-01", "2020-01-03", "2020-01-05"]),
-        }
-    )
-    assert (df["effective_date"] <= df["date"]).all()
-
-
 def test_technicals_shifted_returns():
     df = pd.DataFrame(
         {
