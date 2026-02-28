@@ -164,20 +164,14 @@ def backtest_from_scores(
 
         top_k_rows = _top_k_panel(scores, score_col, cfg)
         port_ret = _portfolio_returns(scores, score_col, cfg, top_k_rows)
-        eq = _equity_curve(port_ret)
-        to = _turnover(top_k_rows, cfg)
+        equity = _equity_curve(port_ret)
+        turnover = _turnover(top_k_rows, cfg)
 
-        artifact = pd.DataFrame({"port_ret": port_ret, "equity": eq}).dropna(subset=["port_ret"])
-        artifact = artifact.join(to, how="left")
+        artifact = pd.DataFrame({"port_ret": port_ret, "equity": equity}).dropna(subset=["port_ret"])
+        artifact = artifact.join(turnover, how="left")
         artifacts[model_name] = artifact
 
-        port_ret = artifact["port_ret"]
-        summary = _summarize_portfolio(
-            port_ret,
-            turnover=artifact["turnover"],
-            equity=artifact["equity"],
-        )
-
+        summary = _summarize_portfolio(port_ret, turnover=turnover, equity=equity)
         summary_rows.append({
             "model": model_name,
             **summary,
@@ -196,10 +190,11 @@ def equal_weight_benchmark(
     port_ret = _equal_weight_returns(df, cfg)
     equity = _equity_curve(port_ret)
     turnover = pd.Series(0.0, index=port_ret.index)
+
     summary = _summarize_portfolio(port_ret, turnover=turnover, equity=equity)
-    row = pd.DataFrame([{
+    rows = pd.DataFrame([{
         "model": "buy_hold_eqw",
         **summary,
         "hit_rate": np.nan,
     }])
-    return row, equity
+    return rows, equity
