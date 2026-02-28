@@ -99,8 +99,8 @@ def compare_on_subset(
         raise ValueError("No data available for selected tickers.")
 
     n_tickers = df["ticker"].nunique()
-    top_k = max(1, int(round(n_tickers * 0.4)))
-    top_k = min(top_k, 10)
+    top_k = max(3, int(round(n_tickers * 0.33)))
+    top_k = min(top_k, 5)
     cfg = BacktestConfig(top_k=top_k)
 
     summary_rows = []

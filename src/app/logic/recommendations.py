@@ -88,8 +88,8 @@ def score_portfolio(
     else:
         snap["rank_pct"] = 0.0
     if top_k is None:
-        top_k = max(1, int(round(len(snap) * 0.4)))
-    top_k = min(top_k, len(snap), 10)
+        top_k = max(3, int(round(len(snap) * 0.33)))
+    top_k = min(top_k, len(snap), 5)
     eligible = snap[snap["eligible"]].copy()
     top_k = min(top_k, len(eligible))
     if top_k > 0:
