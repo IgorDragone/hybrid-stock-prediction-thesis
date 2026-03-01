@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 
 from src.modeling.backtest import BacktestConfig, backtest_from_scores
+from src.modeling.splits import WalkForwardConfig, generate_expanding_walk_forward_splits
 
 
 def _base_df():
@@ -37,10 +38,21 @@ def test_backtest_overlay_scales_exposure():
     cfg = BacktestConfig(top_k=1, overlay_enabled=True, stress_threshold=0.5, risk_off_exposure=0.6, cash_return=0.0)
     _, artifacts = backtest_from_scores(df, {"model": "score"}, cfg)
     port_ret = artifacts["model"]["port_ret"]
-    # date1 has stress 0.8 -> exposure 0.6, date2 has stress 0.2 -> exposure 1.0
     expected = pd.Series(
         [0.10 * 0.6, -0.02 * 1.0],
         index=pd.to_datetime(["2020-01-31", "2020-02-29"]),
         name="port_ret",
     )
     assert np.allclose(port_ret.values, expected.values)
+
+
+def test_walk_forward_embargo_respected():
+    dates = pd.date_range("2018-01-31", periods=36, freq="M")
+    df = pd.DataFrame({"date": dates, "ticker": ["AAA"] * len(dates)})
+    cfg = WalkForwardConfig(train_years=1, test_months=3, embargo_months=2, min_train_months=12)
+    splits = list(generate_expanding_walk_forward_splits(df, cfg))
+    assert splits, "Expected at least one split"
+    for _, _, info in splits:
+        train_end = pd.to_datetime(info["train_end"]).to_period("M")
+        test_start = pd.to_datetime(info["test_start"]).to_period("M")
+        assert test_start >= train_end + cfg.embargo_months
