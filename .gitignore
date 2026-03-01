@@ -25,10 +25,6 @@ data/processed/
 !data/processed/datasets/**/config.yaml
 !data/processed/datasets/**/manifest.json
 
-# Results/artifacts (keep only if you want)
-results/
-!results/README.md
-
 # Logs
 *.log
 logs/
