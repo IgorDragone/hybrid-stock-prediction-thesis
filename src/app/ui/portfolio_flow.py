@@ -1,7 +1,9 @@
 import streamlit as st
-from .ui_components import header, status_box
+
 from src.app.logic.portfolio import save_portfolios
 from src.config import load_universe
+
+from .ui_components import header, status_box
 
 MAX_PORTFOLIOS = 3
 MAX_TICKERS = 15

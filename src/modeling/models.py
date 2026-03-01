@@ -13,6 +13,7 @@ from sklearn.preprocessing import StandardScaler
 from src.config import MODELS_DIR
 from src.modeling.registry import save_model_bundle, save_oos_scores
 
+
 @dataclass(frozen=True)
 class ModelIO:
     date_col: str = "date"

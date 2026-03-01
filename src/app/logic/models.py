@@ -8,7 +8,12 @@ import numpy as np
 import pandas as pd
 
 from src.config import DATASETS_DIR, MODELS_DIR
-from src.modeling.backtest import BacktestConfig, backtest_from_scores, equal_weight_returns, summarize_portfolio
+from src.modeling.backtest import (
+    BacktestConfig,
+    backtest_from_scores,
+    equal_weight_returns,
+    summarize_portfolio,
+)
 from src.modeling.registry import load_model_bundle, load_oos_scores
 
 

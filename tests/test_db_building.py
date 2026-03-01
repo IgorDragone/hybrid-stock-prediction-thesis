@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 
 from src.db_building.build_db import merge_fundamentals_asof

@@ -1,9 +1,11 @@
 import streamlit as st
-from . import compare_flow, db_flow, model_flow, portfolio_flow, summary_page
-from .ui_components import apply_style, status_box
+
 from src.app.logic.portfolio import load_portfolios
 from src.config import load_universe
 from src.modeling.registry import list_models
+
+from . import compare_flow, db_flow, model_flow, portfolio_flow, summary_page
+from .ui_components import apply_style, status_box
 
 
 def _init_flow_state():

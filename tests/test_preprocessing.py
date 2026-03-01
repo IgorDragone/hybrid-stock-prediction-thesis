@@ -1,7 +1,7 @@
 import pandas as pd
 
-from src.preprocessing.pipeline import _sample_eom
 from src.preprocessing.features_engineering import engineer_features
+from src.preprocessing.pipeline import _sample_eom
 
 
 def test_eom_sampling_one_row_per_ticker_month():

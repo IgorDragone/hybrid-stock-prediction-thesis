@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import json
+import joblib
 import pandas as pd
 
 from src.config import MODELS_DIR
@@ -42,7 +43,6 @@ def save_model_bundle(
     base_dir: Path | str = MODELS_DIR,
 ) -> ModelBundle:
     """Persist model artifacts and update the registry."""
-    import joblib
     base_dir = Path(base_dir)
     model_dir = base_dir / model_id
     model_dir.mkdir(parents=True, exist_ok=True)

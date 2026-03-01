@@ -1,6 +1,7 @@
 import logging
 
 import streamlit as st
+
 from . import main_page, selection_page
 
 logger = logging.getLogger(__name__)

@@ -1,8 +1,10 @@
 import altair as alt
 import pandas as pd
 import streamlit as st
-from .ui_components import status_box
+
 from src.app.logic.models import compare_on_subset, list_model_entries, model_equity_curve
+
+from .ui_components import status_box
 
 
 def compare_section():

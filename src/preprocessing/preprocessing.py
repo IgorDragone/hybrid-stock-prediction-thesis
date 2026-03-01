@@ -9,8 +9,8 @@ panel integrity (sorted, unique (date, ticker)).
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import Dict, Optional, Sequence, Tuple
+from dataclasses import dataclass
+from typing import Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
