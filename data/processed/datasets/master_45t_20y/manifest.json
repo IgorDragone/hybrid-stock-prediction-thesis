@@ -1,0 +1,13 @@
+{
+  "dataset_id": "master_45t_20y",
+  "created_at": "2026-02-23T14:08:29.652182+00:00",
+  "git_commit": null,
+  "rows": 221854,
+  "n_tickers": 45,
+  "date_min": "2006-01-03",
+  "date_max": "2025-12-30",
+  "stages": [
+    "panel_raw"
+  ],
+  "notes": null
+}

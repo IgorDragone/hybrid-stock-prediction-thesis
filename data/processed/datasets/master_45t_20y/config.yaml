@@ -1,0 +1,7 @@
+dataset_id: master_45t_20y
+purpose: master_db_build
+universe_path: configs/universe.yaml
+master_years: 20
+start_date: '2006-01-01'
+end_date: '2025-12-31'
+tickers_count: 45
