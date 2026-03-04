@@ -15,7 +15,7 @@ run-app:
 	streamlit run $(APP)
 
 test:
-	pytest -q
+	$(PY) -m pytest -q
 
 lint:
 	ruff check .

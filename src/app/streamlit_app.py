@@ -1,8 +1,12 @@
 import logging
-import streamlit as st
-import main_page
-import selection_page
+import sys
+from pathlib import Path
 
+ROOT_DIR = Path(__file__).resolve().parents[2]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.append(str(ROOT_DIR))
+
+from src.app.ui import streamlit_app # noqa: E402
 
 logger = logging.getLogger(__name__)
 if not logging.getLogger().handlers:
@@ -10,20 +14,7 @@ if not logging.getLogger().handlers:
         level=logging.INFO,
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     )
-logger.info("Starting Streamlit app")
 
-st.set_page_config(
-    page_title="Dragon Trading",
-    page_icon="🐉",
-    layout="wide"
-)
 
-# inizializza stato
-if "page" not in st.session_state:
-    st.session_state.page = 1
-
-# routing
-if st.session_state.page == 1:
-    main_page.render()
-elif st.session_state.page == 2:
-    selection_page.render()
+if __name__ == "__main__":
+    streamlit_app.run()

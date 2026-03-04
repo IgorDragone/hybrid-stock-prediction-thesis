@@ -1,0 +1,54 @@
+{
+  "dataset_id": "master_45t_20y",
+  "created_at": "2026-03-04T00:12:21.005096+00:00",
+  "stages": [
+    "panel_raw",
+    "panel_preprocessed",
+    "panel_eom",
+    "panel_features",
+    "panel_model_ready"
+  ],
+  "final_stage": "panel_model_ready",
+  "stage_summaries": {
+    "panel_raw": {
+      "path": "/Users/igordragone/projects/hybrid-stock-prediction-thesis/data/processed/datasets/master_45t_20y/stages/panel_raw.parquet",
+      "rows": 221854,
+      "n_columns": 39,
+      "n_tickers": 45,
+      "date_min": "2006-01-03",
+      "date_max": "2025-12-30"
+    },
+    "panel_preprocessed": {
+      "path": "/Users/igordragone/projects/hybrid-stock-prediction-thesis/data/processed/datasets/master_45t_20y/stages/panel_preprocessed.parquet",
+      "rows": 221854,
+      "n_columns": 39,
+      "n_tickers": 45,
+      "date_min": "2006-01-03",
+      "date_max": "2025-12-30"
+    },
+    "panel_eom": {
+      "path": "/Users/igordragone/projects/hybrid-stock-prediction-thesis/data/processed/datasets/master_45t_20y/stages/panel_eom.parquet",
+      "rows": 10587,
+      "n_columns": 39,
+      "n_tickers": 45,
+      "date_min": "2006-01-31",
+      "date_max": "2025-12-30"
+    },
+    "panel_features": {
+      "path": "/Users/igordragone/projects/hybrid-stock-prediction-thesis/data/processed/datasets/master_45t_20y/stages/panel_features.parquet",
+      "rows": 10587,
+      "n_columns": 62,
+      "n_tickers": 45,
+      "date_min": "2006-01-31",
+      "date_max": "2025-12-30"
+    },
+    "panel_model_ready": {
+      "path": "/Users/igordragone/projects/hybrid-stock-prediction-thesis/data/processed/datasets/master_45t_20y/stages/panel_model_ready.parquet",
+      "rows": 10452,
+      "n_columns": 26,
+      "n_tickers": 45,
+      "date_min": "2006-01-31",
+      "date_max": "2025-09-30"
+    }
+  }
+}

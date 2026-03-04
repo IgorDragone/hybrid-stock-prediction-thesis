@@ -1,22 +1,19 @@
 general:
   dataset_id: master_45t_20y
-
 db_build:
   universe_path: configs/universe.yaml
   years: 20
-  start_date: "2006-01-01"
-  end_date: "2025-12-31"
-
+  start_date: '2006-01-01'
+  end_date: '2025-12-31'
+  tickers_count: 45
 preprocessing:
   domain_clip: true
   winsorize_fundamentals_cs: true
-
 modeling:
   target_col: target_3m
   train_years: 10
   test_months: 12
   embargo_months: 3
-
 backtest:
   top_k: 5
   overlay_enabled: true

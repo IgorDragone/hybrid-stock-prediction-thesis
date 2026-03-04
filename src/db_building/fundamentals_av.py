@@ -1,0 +1,216 @@
+# src/data/fundamentals_av.py
+"""Fetch quarterly fundamentals from Alpha Vantage API with caching."""
+from __future__ import annotations
+
+import json
+import time
+from pathlib import Path
+
+import pandas as pd
+import requests
+
+AV_URL = "https://www.alphavantage.co/query"
+
+
+def _av_request(function: str, symbol: str, api_key: str, timeout: int = 30) -> dict:
+    """
+    Make a request to the Alpha Vantage API.
+
+    Args:
+        function(str): Alpha Vantage function name
+        symbol(str): Stock ticker symbol
+        api_key(str): Alpha Vantage API key
+        timeout(int): Request timeout in seconds
+    
+    Returns:
+        dict: Parsed JSON response as a dictionary.
+    """
+    params = {"function": function, "symbol": symbol, "apikey": api_key}
+    r = requests.get(AV_URL, params=params, timeout=timeout)
+    r.raise_for_status()
+
+    return r.json()
+
+
+def _load_or_fetch_json(
+    cache_path: Path,
+    function: str,
+    symbol: str,
+    api_key: str,
+    sleep_seconds: float = 12.5,  # ~5 req/min safe
+) -> dict:
+    """
+    Load JSON data from cache or fetch from Alpha Vantage API if not cached.
+
+    Args:
+        cache_path(Path): Path to cache file
+        function(str): Alpha Vantage function name
+        symbol(str): Stock ticker symbol
+        api_key(str): Alpha Vantage API key
+        sleep_seconds(float): Seconds to sleep after fetching to respect rate limits
+    
+    Returns:
+        dict: Parsed JSON data as a dictionary.
+    """
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if cache_path.exists():
+        with cache_path.open("r", encoding="utf-8") as f:
+            return json.load(f)
+
+    data = _av_request(function=function, symbol=symbol, api_key=api_key)
+
+    # HARD FAILS: DO NOT CACHE THESE RESPONSES (something went wrong)
+    if "Information" in data:
+        # daily rate limit message
+        raise RuntimeError(f"Alpha Vantage rate limit: {data['Information'][:200]}")
+
+    if "Note" in data:
+        raise RuntimeError(f"Alpha Vantage note: {data['Note'][:200]}")
+
+    if "Error Message" in data:
+        raise RuntimeError(f"Alpha Vantage error: {data['Error Message']}")
+
+    if not isinstance(data, dict) or len(data) == 0:
+        raise RuntimeError("Alpha Vantage returned empty response.")
+
+    # SAFE TO CACHE
+    with cache_path.open("w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+    time.sleep(sleep_seconds)
+
+    return data
+
+
+def _to_num(s: pd.Series) -> pd.Series:
+    # AV often returns numeric values as strings, sometimes "None"
+    return pd.to_numeric(s.replace({"None": None, "": None}), errors="coerce")
+
+
+def _safe_get(df: pd.DataFrame, col: str) -> pd.Series:
+    # Safely get a numeric column from DataFrame, or return a Series of NaNs if missing
+    if col not in df.columns:
+        return pd.Series([pd.NA] * len(df), index=df.index, dtype="float64")
+    return _to_num(df[col])
+
+
+def fetch_quarterly_fundamentals_av(
+    ticker: str,
+    api_key: str,
+    cache_dir: str | Path,
+) -> pd.DataFrame:
+    """
+    Fetch quarterly fundamentals from Alpha Vantage and return a reduced quarterly wide DataFrame.
+
+    Args:
+        ticker (str): Stock ticker symbol
+        api_key (str): Alpha Vantage API key
+        cache_dir (str | Path): Directory to cache JSON responses
+    
+    Returns:
+        pd.DataFrame: Quarterly fundamentals DataFrame with the following output columns:
+            - fiscalDateEnding (datetime)
+            - roe, roa
+            - operating_margin, gross_margin
+            - revenue_growth_yoy, earnings_growth_yoy, delta_roe_yoy
+            - debt_to_equity, interest_coverage
+            - asset_turnover, fcf_assets
+
+    Notes:
+      - No lag applied here. Apply lag later with effective_date + merge_asof.
+    """
+    cache_dir = Path(cache_dir)
+
+    income_json = _load_or_fetch_json(
+        cache_path=cache_dir / "income" / f"{ticker}.json",
+        function="INCOME_STATEMENT",
+        symbol=ticker,
+        api_key=api_key,
+    )
+    balance_json = _load_or_fetch_json(
+        cache_path=cache_dir / "balance" / f"{ticker}.json",
+        function="BALANCE_SHEET",
+        symbol=ticker,
+        api_key=api_key,
+    )
+    cashflow_json = _load_or_fetch_json(
+        cache_path=cache_dir / "cashflow" / f"{ticker}.json",
+        function="CASH_FLOW",
+        symbol=ticker,
+        api_key=api_key,
+    )
+
+    inc = pd.DataFrame(income_json.get("quarterlyReports", []))
+    bal = pd.DataFrame(balance_json.get("quarterlyReports", []))
+    cf = pd.DataFrame(cashflow_json.get("quarterlyReports", []))
+
+    if inc.empty or bal.empty:
+        # cash flow can be empty for some tickers; income+balance is the minimum
+        raise ValueError(f"No quarterly fundamentals from AV for {ticker}")
+
+    # Standardize date
+    for df in (inc, bal, cf):
+        if not df.empty and "fiscalDateEnding" in df.columns:
+            df["fiscalDateEnding"] = pd.to_datetime(df["fiscalDateEnding"], errors="coerce")
+
+    # Merge statements on fiscalDateEnding
+    q = inc.merge(bal, on="fiscalDateEnding", how="outer", suffixes=("", "_bal"))
+    if not cf.empty:
+        q = q.merge(cf, on="fiscalDateEnding", how="outer", suffixes=("", "_cf"))
+
+    q = q.sort_values("fiscalDateEnding").reset_index(drop=True)
+
+    # Core line items
+    revenue = _safe_get(q, "totalRevenue")
+    net_income = _safe_get(q, "netIncome")
+    operating_income = _safe_get(q, "operatingIncome")
+    gross_profit = _safe_get(q, "grossProfit")
+
+    ebit = _safe_get(q, "ebit")
+    if ebit.isna().all():
+        ebit = operating_income
+
+    interest_expense = _safe_get(q, "interestExpense")
+    if interest_expense.isna().all():
+        interest_expense = _safe_get(q, "interestAndDebtExpense")
+
+    total_assets = _safe_get(q, "totalAssets")
+    total_equity = _safe_get(q, "totalShareholderEquity")
+
+    total_debt = _safe_get(q, "shortLongTermDebtTotal")
+    if total_debt.isna().all():
+        total_debt = _safe_get(q, "shortLongTermDebt")
+    if total_debt.isna().all():
+        total_debt = _safe_get(q, "longTermDebt")
+    if total_debt.isna().all():
+        total_debt = _safe_get(q, "totalLiabilities")
+
+    op_cf = _safe_get(q, "operatingCashflow")
+    capex = _safe_get(q, "capitalExpenditures")
+    fcf = op_cf - capex
+
+    out = pd.DataFrame({"fiscalDateEnding": q["fiscalDateEnding"]})
+
+    valid_equity = total_equity > 0
+    valid_interest_expense = interest_expense > 0 
+    out["roe"] = (net_income / total_equity).where(valid_equity)
+    out["roa"] = net_income / total_assets
+
+    out["operating_margin"] = operating_income / revenue
+    out["gross_margin"] = gross_profit / revenue
+
+    out["revenue_growth_yoy"] = revenue.pct_change(4)
+    out["earnings_growth_yoy"] = net_income.pct_change(4)
+
+    out["debt_to_equity"] = (total_debt / total_equity).where(valid_equity)
+    out["interest_coverage"] = (ebit / interest_expense).where(valid_interest_expense)
+
+    out["asset_turnover"] = revenue / total_assets
+    out["fcf_assets"] = fcf / total_assets
+    out["delta_roe_yoy"] = out["roe"] - out["roe"].shift(4)
+
+    out = out.dropna(subset=["fiscalDateEnding"]).sort_values("fiscalDateEnding")
+    out = out.dropna(axis=1, how="all")
+
+    return out.reset_index(drop=True)
