@@ -11,8 +11,7 @@ from src.config import DATASETS_DIR, MODELS_DIR
 from src.modeling.backtest import (
     BacktestConfig,
     backtest_from_scores,
-    equal_weight_returns,
-    summarize_portfolio,
+    equal_weight_benchmark,
 )
 from src.modeling.registry import load_model_bundle, load_oos_scores
 
@@ -119,12 +118,9 @@ def compare_on_subset(
         model_type = config.get("type")
 
         if model_type == "benchmark" and model_id == "buy_hold_eqw":
-            port_ret = equal_weight_returns(df_scores, cfg)
-            metrics = summarize_portfolio(port_ret, turnover=None)
-            metrics["model"] = model_id
-            metrics["hit_rate"] = np.nan
-            summary_rows.append(metrics)
-            equity = (1.0 + port_ret.fillna(0.0)).cumprod()
+            summary_bench, equity = equal_weight_benchmark(df_scores, cfg)
+            summary_rows.extend(summary_bench.to_dict(orient="records"))
+            port_ret = equity.pct_change().fillna(equity.iloc[0] - 1.0)
             artifacts[model_id] = pd.DataFrame({"port_ret": port_ret, "equity": equity})
             continue
 

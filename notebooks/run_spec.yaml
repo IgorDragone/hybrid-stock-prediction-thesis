@@ -1,6 +1,24 @@
-dataset_id: master_45t_20y
-purpose: master_db_build
-universe_path: configs/universe.yaml
-master_years: 20
-start_date: "2006-01-01"
-end_date: "2025-12-31"
+general:
+  dataset_id: master_45t_20y
+
+db_build:
+  universe_path: configs/universe.yaml
+  years: 20
+  start_date: "2006-01-01"
+  end_date: "2025-12-31"
+
+preprocessing:
+  domain_clip: true
+  winsorize_fundamentals_cs: true
+
+modeling:
+  target_col: target_3m
+  train_years: 10
+  test_months: 12
+  embargo_months: 3
+
+backtest:
+  top_k: 5
+  overlay_enabled: true
+  stress_threshold: 0.5
+  risk_off_exposure: 0.6

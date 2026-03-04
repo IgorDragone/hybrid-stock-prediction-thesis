@@ -1,0 +1,22 @@
+{
+  "type": "ridge",
+  "features": [
+    "roe_pr",
+    "roa_pr",
+    "operating_margin_pr",
+    "gross_margin_pr",
+    "revenue_growth_pr",
+    "earnings_growth_pr",
+    "delta_roe_pr",
+    "debt_pr",
+    "interest_coverage_pr",
+    "asset_turnover_pr",
+    "fcf_assets_pr",
+    "mom12_pr",
+    "mom6_pr",
+    "mom3_pr",
+    "trend_ratio_pr",
+    "vol_pr",
+    "vol_ratio_pr"
+  ]
+}

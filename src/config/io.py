@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
 
+import pandas as pd
 import yaml
 
 
@@ -41,60 +41,57 @@ def save_run_snapshot(cfg: dict, dataset_dir: str | Path) -> Path:
     return out_path
 
 
-def build_manifest(
-    cfg: dict,
-    *,
-    rows: int | None = None,
-    n_tickers: int | None = None,
-    date_min: str | None = None,
-    date_max: str | None = None,
-    stages: Iterable[str] | None = None,
-    notes: str | None = None,
-    git_commit: str | None = None,
-) -> dict:
-    """Create a manifest payload for a dataset build."""
-    return {
-        "dataset_id": cfg.get("dataset_id"),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "git_commit": git_commit,
-        "rows": rows,
-        "n_tickers": n_tickers,
-        "date_min": date_min,
-        "date_max": date_max,
-        "stages": list(stages) if stages else [],
-        "notes": notes,
-    }
-
-
-def build_manifest_from_df(
-    cfg: dict,
-    df,
+def summarize_stage(
+    path: str | Path,
     *,
     date_col: str = "date",
     ticker_col: str = "ticker",
-    stages: Iterable[str] | None = None,
-    notes: str | None = None,
-    git_commit: str | None = None,
 ) -> dict:
-    """Convenience wrapper to build a manifest using a DataFrame."""
-    date_min = None
-    date_max = None
-    n_tickers = None
-    if date_col in df.columns:
-        date_min = str(df[date_col].min().date())
-        date_max = str(df[date_col].max().date())
+    """Summarize a saved stage file for the dataset manifest."""
+    stage_path = Path(path)
+    df = pd.read_parquet(stage_path)
+
+    summary = {
+        "path": str(stage_path),
+        "rows": int(len(df)),
+        "n_columns": int(len(df.columns)),
+    }
+
     if ticker_col in df.columns:
-        n_tickers = df[ticker_col].nunique()
-    return build_manifest(
-        cfg,
-        rows=len(df),
-        n_tickers=n_tickers,
-        date_min=date_min,
-        date_max=date_max,
-        stages=stages,
-        notes=notes,
-        git_commit=git_commit,
-    )
+        summary["n_tickers"] = int(df[ticker_col].nunique())
+
+    if date_col in df.columns:
+        dates = pd.to_datetime(df[date_col])
+        summary["date_min"] = str(dates.min().date())
+        summary["date_max"] = str(dates.max().date())
+
+    return summary
+
+
+def build_pipeline_manifest(
+    dataset_id: str,
+    stage_paths: dict[str, str | Path],
+    *,
+    final_stage: str,
+    date_col: str = "date",
+    ticker_col: str = "ticker",
+) -> dict:
+    """Create a manifest that summarizes every saved pipeline stage."""
+    if final_stage not in stage_paths:
+        raise KeyError(f"final_stage '{final_stage}' not found in stage_paths")
+
+    stage_summaries = {
+        stage_name: summarize_stage(path, date_col=date_col, ticker_col=ticker_col)
+        for stage_name, path in stage_paths.items()
+    }
+
+    return {
+        "dataset_id": dataset_id,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "stages": list(stage_paths.keys()),
+        "final_stage": final_stage,
+        "stage_summaries": stage_summaries,
+    }
 
 
 def save_manifest(manifest: dict, dataset_dir: str | Path) -> Path:

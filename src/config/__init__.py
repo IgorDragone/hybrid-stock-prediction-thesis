@@ -1,8 +1,7 @@
 """Config helpers for loading run specs and writing snapshots."""
 
 from .io import (
-    build_manifest,
-    build_manifest_from_df,
+    build_pipeline_manifest,
     load_yaml,
     save_json,
     save_manifest,
@@ -19,8 +18,7 @@ __all__ = [
     "RESULTS_DIR",
     "MODELS_DIR",
     "ROOT_DIR",
-    "build_manifest",
-    "build_manifest_from_df",
+    "build_pipeline_manifest",
     "load_yaml",
     "load_universe",
     "save_json",

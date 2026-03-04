@@ -47,6 +47,7 @@ def score_portfolio(
         raise ValueError("No data available for selected tickers on latest date.")
 
     model, metrics, config = load_model_bundle(model_id)
+    model_type = config.get("type")
     features = config.get("features") or [
         c for c in snap_full.columns
         if c not in {
@@ -63,11 +64,18 @@ def score_portfolio(
         }
     ]
 
-    model_loaded = model is not None
-    if model is None:
-        # Baseline: momentum score
+    used_fallback = False
+    if model_type == "baseline":
         if "mom12_pr" not in snap_full.columns:
             raise ValueError("mom12_pr not available for baseline scoring.")
+        snap_full["score"] = snap_full["mom12_pr"]
+    elif model_type == "benchmark":
+        raise ValueError("Benchmark entries cannot be used for portfolio scoring.")
+    elif model is None:
+        used_fallback = True
+        # Fallback: momentum score when the trained model cannot be loaded.
+        if "mom12_pr" not in snap_full.columns:
+            raise ValueError("mom12_pr not available for fallback scoring.")
         snap_full["score"] = snap_full["mom12_pr"]
     else:
         snap_full["score"] = model.predict(snap_full[features])
@@ -121,7 +129,7 @@ def score_portfolio(
         "exposure": exposure,
         "stress_index": stress,
         "cash_left": cash_left,
-        "model_loaded": model_loaded,
+        "used_fallback": used_fallback,
         "recommendations": recommendations,
         "metrics": metrics,
     }
