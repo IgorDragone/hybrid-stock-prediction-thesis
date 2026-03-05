@@ -1,4 +1,5 @@
 import altair as alt
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -10,6 +11,63 @@ from src.app.logic.models import (
 )
 
 from .ui_components import status_box
+
+
+def _render_metrics_table(df: pd.DataFrame) -> None:
+    if df.empty:
+        st.dataframe(df, width="stretch", hide_index=True)
+        return
+
+    table = df.copy()
+    if "model" in table.columns and "mean_turnover" in table.columns:
+        # Buy & Hold turnover is not comparable with active strategies in this UI context.
+        bh_mask = table["model"].astype(str).str.contains("Buy & Hold|buy_hold_eqw", case=False, regex=True)
+        table.loc[bh_mask, "mean_turnover"] = np.nan
+
+    rename_map = {
+        "model": "Model",
+        "mean_monthly_return": "Mean Monthly Return",
+        "vol_monthly": "Monthly Volatility",
+        "sharpe": "Sharpe Ratio",
+        "cagr": "CAGR",
+        "max_drawdown": "Max Drawdown",
+        "mean_turnover": "Mean Turnover",
+        "hit_rate": "Hit Rate",
+    }
+    table = table.rename(columns=rename_map)
+
+    numeric_cols = [c for c in table.columns if c != "Model" and pd.api.types.is_numeric_dtype(table[c])]
+    best_direction = {
+        "Mean Monthly Return": "max",
+        "Monthly Volatility": "min",
+        "Sharpe Ratio": "max",
+        "CAGR": "max",
+        "Max Drawdown": "max",  # less negative is better
+        "Mean Turnover": "min",
+        "Hit Rate": "max",
+    }
+
+    def _highlight_best(col: pd.Series) -> list[str]:
+        if col.name not in best_direction or col.dropna().empty:
+            return [""] * len(col)
+        target = col.max() if best_direction[col.name] == "max" else col.min()
+        return [
+            "color: #43a047; font-weight: 700" if pd.notna(v) and v == target else ""
+            for v in col
+        ]
+
+    fmt = {}
+    for col in numeric_cols:
+        if col in {"Mean Monthly Return", "Monthly Volatility", "CAGR", "Max Drawdown", "Mean Turnover", "Hit Rate"}:
+            fmt[col] = "{:+.1%}"
+        elif col == "Sharpe Ratio":
+            fmt[col] = "{:+.2f}"
+
+    styled = table.style.format(fmt, na_rep="—")
+    for col in numeric_cols:
+        styled = styled.apply(_highlight_best, subset=[col])
+
+    st.dataframe(styled, width="stretch", hide_index=True)
 
 
 def compare_section():
@@ -60,7 +118,7 @@ def compare_section():
                     summary = summary[cols]
                 if "model" in summary.columns:
                     summary["model"] = summary["model"].map(lambda m: label_map.get(m, m))
-                st.dataframe(summary, width="stretch", hide_index=True)
+                _render_metrics_table(summary)
             else:
                 status_box("No metrics available for the selected models.")
         else:
@@ -81,7 +139,7 @@ def compare_section():
             if rows:
                 for row in rows:
                     row["model"] = label_map.get(row["model"], row["model"])
-            st.dataframe(rows, width="stretch", hide_index=True)
+            _render_metrics_table(pd.DataFrame(rows))
 
         curves = {}
         if tickers:
