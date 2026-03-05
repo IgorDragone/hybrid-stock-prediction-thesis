@@ -6,8 +6,56 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from src.config import DATASETS_DIR
+from src.config import DATASETS_DIR, load_universe
 from src.modeling.registry import load_model_bundle
+
+TICKER_COMPANY = {
+    "AAPL": "Apple Inc.",
+    "ABBV": "AbbVie Inc.",
+    "AEP": "American Electric Power Company, Inc.",
+    "AMT": "American Tower Corporation",
+    "AMZN": "Amazon.com, Inc.",
+    "AXP": "American Express Company",
+    "BA": "The Boeing Company",
+    "BAC": "Bank of America Corporation",
+    "CAT": "Caterpillar Inc.",
+    "COP": "ConocoPhillips",
+    "COST": "Costco Wholesale Corporation",
+    "CVX": "Chevron Corporation",
+    "D": "Dominion Energy, Inc.",
+    "DUK": "Duke Energy Corporation",
+    "EQIX": "Equinix, Inc.",
+    "GE": "GE Aerospace",
+    "GOOGL": "Alphabet Inc.",
+    "GS": "The Goldman Sachs Group, Inc.",
+    "JNJ": "Johnson & Johnson",
+    "JPM": "JPMorgan Chase & Co.",
+    "KO": "The Coca-Cola Company",
+    "MCD": "McDonald's Corporation",
+    "META": "Meta Platforms, Inc.",
+    "MMM": "3M Company",
+    "MRK": "Merck & Co., Inc.",
+    "MS": "Morgan Stanley",
+    "MSFT": "Microsoft Corporation",
+    "NEE": "NextEra Energy, Inc.",
+    "NKE": "NIKE, Inc.",
+    "NVDA": "NVIDIA Corporation",
+    "PEP": "PepsiCo, Inc.",
+    "PFE": "Pfizer Inc.",
+    "PG": "The Procter & Gamble Company",
+    "PLD": "Prologis, Inc.",
+    "PSA": "Public Storage",
+    "SBUX": "Starbucks Corporation",
+    "SHEL": "Shell plc",
+    "SO": "The Southern Company",
+    "SPG": "Simon Property Group, Inc.",
+    "TSLA": "Tesla, Inc.",
+    "TTE": "TotalEnergies SE",
+    "UNH": "UnitedHealth Group Incorporated",
+    "UNP": "Union Pacific Corporation",
+    "WMT": "Walmart Inc.",
+    "XOM": "Exxon Mobil Corporation",
+}
 
 
 def _find_latest_model_ready() -> Path:
@@ -29,13 +77,40 @@ def _load_snapshot(tickers: list[str]) -> tuple[pd.DataFrame, pd.Timestamp]:
     return snap, latest_date
 
 
-def score_portfolio(
+def _recommendation_level(rank_pct_global: float) -> str:
+    if rank_pct_global <= 0.10:
+        return "Very High"
+    if rank_pct_global <= 0.30:
+        return "High"
+    if rank_pct_global < 0.50:
+        return "Medium (Upper)"
+    if rank_pct_global < 0.70:
+        return "Medium (Lower)"
+    if rank_pct_global < 0.90:
+        return "Low"
+    return "Very Low"
+
+
+def _ticker_sector_map() -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    try:
+        universe = load_universe()
+        for entry in universe:
+            sector = entry.get("sector", "Unknown")
+            for ticker in entry.get("tickers", []):
+                mapping[str(ticker)] = str(sector)
+    except Exception:  # noqa: BLE001
+        return {}
+    return mapping
+
+
+def score_watchlist(
     model_id: str,
     tickers: list[str],
-    cash: float,
     top_k: int | None = None,
 ) -> dict[str, Any]:
-    min_global_pct = 0.3
+    buy_threshold = 0.30
+    sell_threshold = 0.70
 
     snap_full, latest_date = _load_snapshot([])
     if snap_full.empty:
@@ -86,25 +161,21 @@ def score_portfolio(
         snap_full["rank_pct_global"] = (snap_full["rank_global"] - 1) / (len(snap_full) - 1)
     else:
         snap_full["rank_pct_global"] = 0.0
-    snap_full["eligible"] = snap_full["rank_pct_global"] <= min_global_pct
 
     snap = snap_full[snap_full["ticker"].isin(snap_subset["ticker"])].copy()
     snap = snap.sort_values("score", ascending=False).copy()
+    snap["company"] = snap["ticker"].map(TICKER_COMPANY).fillna(snap["ticker"])
+    sector_map = _ticker_sector_map()
+    snap["sector"] = snap["ticker"].map(sector_map).fillna("Unknown")
     snap["rank"] = np.arange(1, len(snap) + 1)
     if len(snap) > 1:
         snap["rank_pct"] = (snap["rank"] - 1) / (len(snap) - 1)
     else:
         snap["rank_pct"] = 0.0
-    if top_k is None:
-        top_k = max(3, int(round(len(snap) * 0.33)))
-    top_k = min(top_k, len(snap), 5)
-    eligible = snap[snap["eligible"]].copy()
-    top_k = min(top_k, len(eligible))
-    if top_k > 0:
-        buy_tickers = eligible.head(top_k)["ticker"]
-        snap["action"] = np.where(snap["ticker"].isin(buy_tickers), "BUY ✅", "SELL ⛔")
-    else:
-        snap["action"] = "SELL ⛔"
+    snap["action"] = "HOLD ⏸️"
+    snap.loc[snap["rank_pct_global"] <= buy_threshold, "action"] = "BUY ✅"
+    snap.loc[snap["rank_pct_global"] >= sell_threshold, "action"] = "SELL ⛔"
+    snap["recommendation_level"] = snap["rank_pct_global"].apply(_recommendation_level)
 
     exposure = 1.0
     if "stress_index" in snap.columns:
@@ -113,22 +184,29 @@ def score_portfolio(
     else:
         stress = None
 
-    investable_cash = cash * exposure if top_k > 0 else 0.0
-    cash_left = cash - investable_cash
-    snap["allocation_eur"] = 0.0
-    if top_k > 0:
-        per_buy = investable_cash / top_k
-        snap.loc[snap["action"] == "BUY ✅", "allocation_eur"] = per_buy
+    buy_count = int((snap["action"] == "BUY ✅").sum())
 
+    universe_size = len(snap_full)
     recommendations = snap[
-        ["rank", "ticker", "action", "allocation_eur", "score", "rank_pct", "rank_pct_global"]
+        [
+            "rank",
+            "ticker",
+            "company",
+            "sector",
+            "action",
+            "recommendation_level",
+            "rank_global",
+            "rank_pct",
+            "rank_pct_global",
+        ]
     ].copy()
     recommendations = recommendations.set_index("rank")
     return {
         "date": latest_date,
         "exposure": exposure,
         "stress_index": stress,
-        "cash_left": cash_left,
+        "buy_count": buy_count,
+        "universe_size": universe_size,
         "used_fallback": used_fallback,
         "recommendations": recommendations,
         "metrics": metrics,

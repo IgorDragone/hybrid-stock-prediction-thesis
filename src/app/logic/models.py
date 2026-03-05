@@ -43,6 +43,29 @@ def model_equity_curve(model_id: str, base_dir: Path | str = MODELS_DIR) -> dict
     return {"date": dates, "equity": values}
 
 
+def benchmark_equity_curve(benchmark_id: str = "sp500") -> dict[str, list[float]] | None:
+    candidates = list(DATASETS_DIR.glob(f"*/benchmarks/{benchmark_id}.parquet"))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    bench = pd.read_parquet(candidates[0]).copy()
+    if "date" not in bench.columns:
+        return None
+    bench["date"] = pd.to_datetime(bench["date"])
+    bench = bench.sort_values("date")
+    if "equity" not in bench.columns:
+        if "ret_1m" not in bench.columns:
+            return None
+        bench["equity"] = (1.0 + bench["ret_1m"].fillna(0.0)).cumprod()
+    bench = bench.dropna(subset=["equity"])
+    if bench.empty:
+        return None
+    return {
+        "date": bench["date"].dt.strftime("%Y-%m-%d").tolist(),
+        "equity": bench["equity"].astype(float).tolist(),
+    }
+
+
 def _find_latest_model_ready() -> Path:
     candidates = list(DATASETS_DIR.glob("*/stages/panel_model_ready.parquet"))
     if not candidates:

@@ -2,7 +2,12 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
-from src.app.logic.models import compare_on_subset, list_model_entries, model_equity_curve
+from src.app.logic.models import (
+    benchmark_equity_curve,
+    compare_on_subset,
+    list_model_entries,
+    model_equity_curve,
+)
 
 from .ui_components import status_box
 
@@ -22,11 +27,25 @@ def compare_section():
     }
     model_options = [m.get("id") for m in entries]
     selected = st.multiselect("Models to compare", model_options, default=model_options)
+    benchmark_label = {
+        "sp500": "S&P 500",
+        "nasdaq": "NASDAQ (QQQ)",
+    }
+    benchmark_options = []
+    for benchmark_id in ("sp500", "nasdaq"):
+        if benchmark_equity_curve(benchmark_id):
+            benchmark_options.append(benchmark_id)
+    selected_benchmarks = st.multiselect(
+        "Benchmarks",
+        benchmark_options,
+        default=benchmark_options,
+        format_func=lambda bid: benchmark_label.get(bid, bid),
+    )
     if selected:
-        tickers = st.session_state.get("portfolio_tickers", [])
+        tickers = st.session_state.get("watchlist_tickers", [])
         if tickers:
             st.caption("Metrics computed on the selected ticker subset.")
-            if st.button("Run subset backtest", use_container_width=True):
+            if st.button("Run subset backtest", width="stretch"):
                 with st.spinner("Computing subset backtest..."):
                     try:
                         summary, curves_df = _cached_compare_on_subset(tuple(selected), tuple(tickers))
@@ -41,7 +60,7 @@ def compare_section():
                     summary = summary[cols]
                 if "model" in summary.columns:
                     summary["model"] = summary["model"].map(lambda m: label_map.get(m, m))
-                st.dataframe(summary, use_container_width=True, hide_index=True)
+                st.dataframe(summary, width="stretch", hide_index=True)
             else:
                 status_box("No metrics available for the selected models.")
         else:
@@ -62,7 +81,7 @@ def compare_section():
             if rows:
                 for row in rows:
                     row["model"] = label_map.get(row["model"], row["model"])
-            st.dataframe(rows, use_container_width=True, hide_index=True)
+            st.dataframe(rows, width="stretch", hide_index=True)
 
         curves = {}
         if tickers:
@@ -72,6 +91,10 @@ def compare_section():
                 curve = model_equity_curve(model_id)
                 if curve:
                     curves[model_id] = curve
+        for benchmark_id in selected_benchmarks:
+            curve = benchmark_equity_curve(benchmark_id)
+            if curve:
+                curves[benchmark_label.get(benchmark_id, benchmark_id)] = curve
         if curves:
             st.markdown("### Equity Curves")
             series = {}
@@ -107,7 +130,7 @@ def compare_section():
                 )
                 .properties(height=300)
             )
-            st.altair_chart(chart, use_container_width=True)
+            st.altair_chart(chart, width="stretch")
             st.caption("X: year · Y: equity value (starting from $1000)")
         else:
             status_box("No equity curves found for selected models.")

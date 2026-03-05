@@ -1,7 +1,8 @@
+from pathlib import Path
+
 import streamlit as st
 
-REPO_PATH = "/Users/igordragone/projects/hybrid-stock-prediction-thesis/"
-ASSETS_PATH = REPO_PATH + "src/app/assets/"
+ASSETS_PATH = Path(__file__).resolve().parents[1] / "assets"
 
 def render():
 
@@ -23,7 +24,7 @@ def render():
 
     # HERO IMAGE
     st.image(
-        ASSETS_PATH + "dragon_trading3.png",
+        str(ASSETS_PATH / "dragon_trading3.png"),
         caption="Turning data into investment insights"
     )
 
