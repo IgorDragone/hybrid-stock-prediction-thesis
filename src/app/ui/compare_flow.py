@@ -47,13 +47,21 @@ def _render_metrics_table(df: pd.DataFrame) -> None:
         "Hit Rate": "max",
     }
 
+    def _rounded_for_display(series: pd.Series, col_name: str) -> pd.Series:
+        if col_name in {"Mean Monthly Return", "Monthly Volatility", "CAGR", "Max Drawdown", "Mean Turnover", "Hit Rate"}:
+            return series.round(3)  # matches {:+.1%} display precision
+        if col_name == "Sharpe Ratio":
+            return series.round(2)
+        return series
+
     def _highlight_best(col: pd.Series) -> list[str]:
         if col.name not in best_direction or col.dropna().empty:
             return [""] * len(col)
-        target = col.max() if best_direction[col.name] == "max" else col.min()
+        shown = _rounded_for_display(col, col.name)
+        target = shown.max() if best_direction[col.name] == "max" else shown.min()
         return [
             "color: #43a047; font-weight: 700" if pd.notna(v) and v == target else ""
-            for v in col
+            for v in shown
         ]
 
     fmt = {}

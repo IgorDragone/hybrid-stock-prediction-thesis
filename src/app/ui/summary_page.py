@@ -1,8 +1,9 @@
-import streamlit as st
 from uuid import uuid4
 
-from src.app.logic.watchlists import save_watchlists
+import streamlit as st
+
 from src.app.logic.recommendations import score_watchlist
+from src.app.logic.watchlists import save_watchlists
 
 from .ui_components import header, status_box
 

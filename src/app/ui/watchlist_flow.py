@@ -1,5 +1,6 @@
-import streamlit as st
 from uuid import uuid4
+
+import streamlit as st
 
 from src.app.logic.watchlists import save_watchlists
 from src.config import load_universe

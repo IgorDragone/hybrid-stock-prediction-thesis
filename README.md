@@ -1,5 +1,7 @@
 # Hybrid Stock Prediction Thesis
 
+[![CI](https://github.com/IgorDragone/hybrid-stock-prediction-thesis/actions/workflows/ci.yml/badge.svg)](https://github.com/IgorDragone/hybrid-stock-prediction-thesis/actions/workflows/ci.yml)
+
 An end-to-end equity ranking and portfolio construction project built for my final thesis in Computer Engineering at the University of La Laguna.
 
 The project combines:
@@ -202,6 +204,19 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+### 4. Configure Alpha Vantage
+
+Fundamental-data downloads require a free Alpha Vantage API key. Copy the example file and replace the placeholder locally:
+
+```bash
+cp .env.example .env
+set -a
+source .env
+set +a
+```
+
+The `.env` file is ignored by Git and must never be committed. The application reads `ALPHAVANTAGE_API_KEY` from the process environment, so load the file in each new shell session or export the variable through your preferred environment manager.
+
 ## Typical Commands
 
 Run tests:
@@ -282,3 +297,6 @@ It sits at the intersection of:
 Computer Engineering, University of La Laguna  
 Thesis project, 2025/2026
 
+## Disclaimer
+
+This project is for academic and educational purposes only. Its outputs are not financial advice, investment recommendations, or a guarantee of future performance. Backtest results are hypothetical and may not reflect transaction costs, taxes, liquidity constraints, or live-market execution.
